@@ -1,51 +1,34 @@
 FROM python:3.11-slim
 
-# Configurar variáveis de ambiente para instalação não-interativa
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV PIP_NO_CACHE_DIR=1
-
-# Atualizar sistema e instalar dependências básicas primeiro
-RUN apt-get update -y && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
+# Instalar dependências básicas primeiro
+RUN apt-get update && apt-get install -y \
     wget \
-    curl \
     gnupg2 \
     software-properties-common \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
 # Instalar cuDNN 9.11.0 seguindo as instruções oficiais
-RUN wget -q https://developer.download.nvidia.com/compute/cudnn/9.11.0/local_installers/cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
+RUN wget https://developer.download.nvidia.com/compute/cudnn/9.11.0/local_installers/cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
     && dpkg -i cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
     && cp /var/cudnn-local-repo-ubuntu2204-9.11.0/cudnn-*-keyring.gpg /usr/share/keyrings/ \
-    && apt-get update -y \
-    && apt-get install -y --no-install-recommends cudnn-cuda-12 \
-    && rm cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && apt-get update \
+    && apt-get -y install cudnn-cuda-12 \
+    && rm cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb
 
-# Instalar dependências do sistema para TTS
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    make \
-    libsndfile1 \
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
     espeak \
     espeak-data \
     libespeak1 \
     libespeak-dev \
+    libsndfile1 \
     ffmpeg \
+    curl \
     build-essential \
     pkg-config \
     libssl-dev \
     libffi-dev \
-    git \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
 # Configurar variáveis de ambiente NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
@@ -55,7 +38,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 WORKDIR /app
 
 # Atualizar pip para versão mais recente
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copiar requirements primeiro (para cache de layers)
 COPY app/requirements.txt .
@@ -63,13 +46,13 @@ COPY app/requirements.txt .
 # Instalar dependências Python do requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar PyTorch com CUDA 12.1
+# Instalar PyTorch com CUDA (se disponível)
 RUN pip install --no-cache-dir \
     torch==2.4.1+cu121 \
     torchaudio==2.4.1+cu121 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Instalar bibliotecas de áudio e TTS
+# Instalar bibliotecas de áudio primeiro
 RUN pip install --no-cache-dir \
     soundfile==0.12.1 \
     librosa==0.10.1 \
@@ -92,15 +75,12 @@ COPY app/ .
 RUN mkdir -p models output logs tmp cache && \
     chmod 755 models output logs tmp cache && \
     find . -type f -name "*.py" -exec chmod 644 {} \; && \
+    find . -type f -name "*.sh" -exec chmod 755 {} \; && \
+    find . -type f -name "*.json" -exec chmod 644 {} \; && \
+    find . -type f -name "*.txt" -exec chmod 644 {} \; && \
+    find . -type f -name "*.md" -exec chmod 644 {} \; && \
     find . -type d -exec chmod 755 {} \; && \
     chmod 755 /app
-
-# Configurar cache de modelos
-ENV HF_HOME=/app/models
-ENV TRANSFORMERS_CACHE=/app/models
-ENV HUGGINGFACE_HUB_CACHE=/app/models
-ENV HF_HUB_CACHE=/app/models
-ENV TOKENIZERS_PARALLELISM=false
 
 # Expor porta
 EXPOSE 8888
