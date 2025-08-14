@@ -65,6 +65,8 @@ app = FastAPI(
 
 # Modelo de request
 class TTSRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    
     text: str
     model_name: Optional[str] = "tts_models/en/ljspeech/tacotron2-DDC"
     speaker: Optional[str] = None

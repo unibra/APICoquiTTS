@@ -34,9 +34,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Instalar PyTorch com CUDA (se disponível)
 RUN pip install --no-cache-dir \
-    torch==2.4.1+cu121 \
-    torchaudio==2.4.1+cu121 \
-    --index-url https://download.pytorch.org/whl/cu121
+    torch==2.5.1+cu124 \
+    torchaudio==2.5.1+cu124 \
+    --index-url https://download.pytorch.org/whl/cu124
 
 # Instalar bibliotecas de áudio primeiro
 RUN pip install --no-cache-dir \
