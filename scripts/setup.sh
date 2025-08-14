@@ -18,6 +18,11 @@ if ! command -v docker-compose &> /dev/null; then
     exit 1
 fi
 
+# Verificar se runtime NVIDIA está configurado
+if ! docker info 2>/dev/null | grep -q nvidia; then
+    echo "⚠️  Runtime NVIDIA pode não estar configurado. Verifique se nvidia-docker2 está instalado."
+fi
+
 echo "✅ Docker e Docker Compose encontrados!"
 
 # Construir e iniciar serviços

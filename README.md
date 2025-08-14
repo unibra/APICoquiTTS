@@ -25,7 +25,9 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otim
 - Monitoramento em tempo real (uso, temperatura, memória)
 - Detecção automática de capacidade computacional
 - Logs detalhados das configurações GPU
-- Suporte completo a NVIDIA Docker
+- Runtime NVIDIA com isolamento adequado
+- Cache inteligente de modelos HuggingFace
+- Configurações otimizadas do PyTorch CUDA
 
 **Performance:**
 - PyTorch 2.1.2 com CUDA 11.8
@@ -54,10 +56,10 @@ Para usar com RTX 5090, certifique-se de ter:
 
 ### Pré-requisitos
 
-- Docker com suporte NVIDIA (nvidia-docker2)
+- Docker com runtime NVIDIA instalado
 - NVIDIA RTX 5090 com drivers atualizados
-- Driver NVIDIA 535.86.10 ou superior
-- CUDA 12.1 ou superior
+- Driver NVIDIA 525.60.13 ou superior
+- Docker Compose 3.8+
 
 ### 1. Construir e Executar com Docker Compose
 

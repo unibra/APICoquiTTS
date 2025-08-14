@@ -34,8 +34,13 @@ def setup_gpu_optimization():
         # Otimizações de memória
         torch.cuda.empty_cache()
         
+        # Configurações específicas do ambiente
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+        os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Para performance
+        
         # Configurar precision otimizada
         torch.set_float32_matmul_precision('high')
+        torch.cuda.empty_cache()
         
         # Log das configurações GPU
         gpu_info = torch.cuda.get_device_properties(0)
@@ -43,6 +48,8 @@ def setup_gpu_optimization():
         logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
         logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor}")
         logger.info(f"CUDA Version: {torch.version.cuda}")
+        logger.info(f"PyTorch CUDA available: {torch.cuda.is_available()}")
+        logger.info(f"CUDA device count: {torch.cuda.device_count()}")
         
         return True
     return False

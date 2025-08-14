@@ -5,34 +5,47 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    container_name: tts-api
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEBUG=False
+      - LOG_LEVEL=INFO
+      - TTS_CACHE_PATH=/app/models
+      - HF_HOME=/app/models
+      - TRANSFORMERS_CACHE=/app/models
+      - HUGGINGFACE_HUB_CACHE=/app/models
+      - HF_HUB_CACHE=/app/models
+      - TOKENIZERS_PARALLELISM=false
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - WHISPER_DEVICE=cuda
     ports:
       - "8888:8888"
     volumes:
-      - ./models:/app/models  # Cache de modelos
-      - ./output:/app/output  # Arquivos de saída (opcional)
-    environment:
-      - PYTHONUNBUFFERED=1
-      - TTS_CACHE_PATH=/app/models
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    restart: unless-stopped
+      - tts_models:/app/models
+      - tts_output:/app/output
+      - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 120s
+    networks:
+      - tts-net
 
 # Volumes para persistência
 volumes:
-  models:
+  tts_models:
     driver: local
-  output:
+  tts_output:
     driver: local
+
+# Network isolada
+networks:
+  tts-net:
+    driver: bridge
