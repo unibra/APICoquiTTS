@@ -1,33 +1,19 @@
 FROM python:3.11-slim
 
-# Instalar dependências básicas primeiro
+# Instalar dependências básicas do sistema
 RUN apt-get update && apt-get install -y \
     wget \
-    gnupg2 \
-    software-properties-common \
-    && rm -rf /var/lib/apt/lists/*
-
-# Instalar cuDNN 9.11.0 seguindo as instruções oficiais
-RUN wget https://developer.download.nvidia.com/compute/cudnn/9.11.0/local_installers/cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
-    && dpkg -i cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
-    && cp /var/cudnn-local-repo-ubuntu2204-9.11.0/cudnn-*-keyring.gpg /usr/share/keyrings/ \
-    && apt-get update \
-    && apt-get -y install cudnn-cuda-12 \
-    && rm cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb
-
-# Instalar dependências do sistema
-RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libffi-dev \
     espeak \
     espeak-data \
     libespeak1 \
     libespeak-dev \
     libsndfile1 \
     ffmpeg \
-    curl \
-    build-essential \
-    pkg-config \
-    libssl-dev \
-    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar variáveis de ambiente NVIDIA
