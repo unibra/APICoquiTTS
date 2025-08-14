@@ -14,6 +14,30 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otim
 - ⚡ Aceleração GPU com CUDA 12.1
 - 🔥 Suporte a Tensor Cores de 4ª geração
 
+**Otimizações Específicas RTX 5090:**
+- **Base CUDA 12.1** - Suporte otimizado para arquitetura Ada Lovelace
+- **Tensor Cores 4ª geração** - Habilitado com `allow_tf32=True`
+- **Precisão mista** - `torch.set_float32_matmul_precision('high')`
+- **Benchmark automático** - `torch.backends.cudnn.benchmark = True`
+- **Gerenciamento de memória** - Cache otimizado e limpeza automática
+
+**Recursos GPU:**
+- Monitoramento em tempo real (uso, temperatura, memória)
+- Detecção automática de capacidade computacional
+- Logs detalhados das configurações GPU
+- Suporte completo a NVIDIA Docker
+
+**Performance:**
+- PyTorch 2.1.2 com CUDA 12.1
+- Bibliotecas otimizadas (nvidia-ml-py3, GPUtil)
+- Cache inteligente de modelos
+- Processamento paralelo otimizado
+
+Para usar com RTX 5090, certifique-se de ter:
+1. NVIDIA Docker instalado (`nvidia-docker2`)
+2. Drivers NVIDIA atualizados (535.86.10+)
+3. Docker Compose 3.8+ com suporte GPU
+
 ## Estrutura do Projeto
 
 ```
