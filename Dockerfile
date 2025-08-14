@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.8-devel-ubuntu22.04
+FROM nvidia/cuda:12.1-devel-ubuntu22.04
 
 # Instalar Python 3.9 e ferramentas básicas
 RUN apt-get update && apt-get install -y \

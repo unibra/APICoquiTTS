@@ -11,7 +11,7 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otim
 - 📊 Documentação automática da API
 - 🔧 Configuração flexível de modelos e vozes
 - 📈 Health checks e monitoramento
-- ⚡ Aceleração GPU com CUDA 11.8
+- ⚡ Aceleração GPU com CUDA 12.1
 - 🔥 Suporte a Tensor Cores de 4ª geração
 
 ## Estrutura do Projeto
@@ -33,7 +33,8 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otim
 
 - Docker com suporte NVIDIA (nvidia-docker2)
 - NVIDIA RTX 5090 com drivers atualizados
-- Driver NVIDIA 525.60.13 ou superior
+- Driver NVIDIA 535.86.10 ou superior
+- CUDA 12.1 ou superior
 
 ### 1. Construir e Executar com Docker Compose
 
