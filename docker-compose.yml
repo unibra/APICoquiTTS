@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  tts-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./models:/app/models  # Cache de modelos
+      - ./output:/app/output  # Arquivos de saída (opcional)
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TTS_CACHE_PATH=/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Serviço opcional: Nginx como proxy reverso
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - tts-api
+    restart: unless-stopped
+
+# Volumes para persistência
+volumes:
+  models:
+    driver: local
+  output:
+    driver: local

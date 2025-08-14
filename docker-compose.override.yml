@@ -1,0 +1,11 @@
+version: '3.8'
+
+# Arquivo de override para desenvolvimento
+services:
+  tts-api:
+    volumes:
+      - ./app:/app  # Hot reload durante desenvolvimento
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8888", "--reload"]
