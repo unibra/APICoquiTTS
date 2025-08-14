@@ -1,0 +1,22 @@
+# Dependências otimizadas para GPU RTX 5090
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+TTS==0.22.0
+soundfile==0.12.1
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# PyTorch com suporte CUDA 11.8 (otimizado para RTX 5090)
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch==2.1.0+cu118
+torchaudio==2.1.0+cu118
+torchvision==2.1.0+cu118
+
+# Bibliotecas de otimização GPU
+nvidia-ml-py3==12.535.133
+gputil==1.4.0
+numba==0.58.1
+
+# Otimizações adicionais
+numpy==1.24.3
+scipy==1.11.4

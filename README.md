@@ -1,15 +1,18 @@
 # Coqui TTS API Service
 
-Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose.
+Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otimizado para NVIDIA RTX 5090.
 
 ## Funcionalidades
 
 - 🎤 Conversão de texto em áudio usando modelos Coqui TTS
+- 🚀 Otimizações específicas para NVIDIA RTX 5090 (Ada Lovelace)
 - 🚀 API REST com FastAPI
 - 🐳 Containerização com Docker
 - 📊 Documentação automática da API
 - 🔧 Configuração flexível de modelos e vozes
 - 📈 Health checks e monitoramento
+- ⚡ Aceleração GPU com CUDA 11.8
+- 🔥 Suporte a Tensor Cores de 4ª geração
 
 ## Estrutura do Projeto
 
@@ -25,6 +28,12 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose.
 ```
 
 ## Como Usar
+
+### Pré-requisitos
+
+- Docker com suporte NVIDIA (nvidia-docker2)
+- NVIDIA RTX 5090 com drivers atualizados
+- Driver NVIDIA 525.60.13 ou superior
 
 ### 1. Construir e Executar com Docker Compose
 

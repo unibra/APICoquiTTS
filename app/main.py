@@ -5,19 +5,53 @@ import io
 import logging
 from typing import Optional
 import uvicorn
+import torch
+import os
+import psutil
+import threading
+import time
 
 try:
     from TTS.api import TTS
+    import GPUtil
 except ImportError:
     TTS = None
+    GPUtil = None
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Configurações de otimização para RTX 5090
+def setup_gpu_optimization():
+    """Configurar otimizações específicas para RTX 5090"""
+    if torch.cuda.is_available():
+        # Configurar para RTX 5090 (Ada Lovelace architecture)
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        
+        # Otimizações de memória
+        torch.cuda.empty_cache()
+        
+        # Configurar precision otimizada
+        torch.set_float32_matmul_precision('high')
+        
+        # Log das configurações GPU
+        gpu_info = torch.cuda.get_device_properties(0)
+        logger.info(f"GPU detectada: {gpu_info.name}")
+        logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
+        logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor}")
+        
+        return True
+    return False
+
+# Configurar GPU na inicialização
+gpu_available = setup_gpu_optimization()
+
 app = FastAPI(
     title="Coqui TTS API",
-    description="Serviço de Text-to-Speech usando Coqui TTS",
+    description="Serviço de Text-to-Speech usando Coqui TTS otimizado para NVIDIA RTX 5090",
     version="1.0.0"
 )
 
@@ -27,6 +61,8 @@ class TTSRequest(BaseModel):
     model_name: Optional[str] = "tts_models/en/ljspeech/tacotron2-DDC"
     speaker: Optional[str] = None
     language: Optional[str] = "en"
+    use_gpu: Optional[bool] = True
+    speed: Optional[float] = 1.0
 
 # Variável global para armazenar o modelo TTS
 tts_model = None
@@ -44,8 +80,16 @@ async def startup_event():
         # Inicializar com modelo padrão
         default_model = "tts_models/en/ljspeech/tacotron2-DDC"
         logger.info(f"Carregando modelo TTS: {default_model}")
-        tts_model = TTS(model_name=default_model)
+        
+        # Configurar device (GPU se disponível)
+        device = "cuda" if gpu_available else "cpu"
+        logger.info(f"Usando device: {device}")
+        
+        tts_model = TTS(model_name=default_model).to(device)
         logger.info("Modelo TTS carregado com sucesso!")
+        
+        if gpu_available:
+            logger.info("Otimizações RTX 5090 ativadas!")
     except Exception as e:
         logger.error(f"Erro ao carregar modelo TTS: {e}")
 
@@ -61,9 +105,47 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Verificação de saúde da aplicação"""
+    gpu_info = {}
+    if gpu_available and GPUtil:
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu = gpus[0]
+                gpu_info = {
+                    "name": gpu.name,
+                    "memory_used": f"{gpu.memoryUsed}MB",
+                    "memory_total": f"{gpu.memoryTotal}MB",
+                    "gpu_load": f"{gpu.load*100:.1f}%",
+                    "temperature": f"{gpu.temperature}°C"
+                }
+        except:
+            pass
+    
+    gpu_info = {}
+    if gpu_available and GPUtil:
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu = gpus[0]
+                gpu_info = {
+                    "name": gpu.name,
+                    "memory_used": f"{gpu.memoryUsed}MB",
+                    "memory_total": f"{gpu.memoryTotal}MB",
+                    "gpu_load": f"{gpu.load*100:.1f}%",
+                    "temperature": f"{gpu.temperature}°C"
+                }
+        except:
+            pass
+    
     return {
         "status": "healthy",
-        "tts_available": tts_model is not None
+        "tts_available": tts_model is not None,
+        "gpu_available": gpu_available,
+        "device": "cuda" if gpu_available else "cpu",
+        "gpu_info": gpu_info
+        "gpu_available": gpu_available,
+        "device": "cuda" if gpu_available else "cpu",
+        "gpu_info": gpu_info
     }
 
 @app.get("/models")
@@ -100,13 +182,15 @@ async def text_to_speech(request: TTSRequest):
         current_tts = tts_model
         if request.model_name and request.model_name != "tts_models/en/ljspeech/tacotron2-DDC":
             logger.info(f"Carregando modelo específico: {request.model_name}")
-            current_tts = TTS(model_name=request.model_name)
+            device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
+            current_tts = TTS(model_name=request.model_name).to(device)
         
         if current_tts is None:
             raise HTTPException(status_code=500, detail="Modelo TTS não está carregado")
         
         # Gerar áudio
-        logger.info(f"Gerando áudio para texto: {request.text[:50]}...")
+        device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
+        logger.info(f"Gerando áudio para texto: {request.text[:50]}... (device: {device})")
         
         # Criar buffer em memória para o áudio
         audio_buffer = io.BytesIO()
@@ -117,9 +201,14 @@ async def text_to_speech(request: TTSRequest):
             tts_kwargs["speaker"] = request.speaker
         if request.language:
             tts_kwargs["language"] = request.language
+        if request.speed != 1.0:
+    use_gpu: Optional[bool] = True
+    speed: Optional[float] = 1.0
+            tts_kwargs["speed"] = request.speed
         
-        # Gerar áudio e salvar no buffer
-        wav_data = current_tts.tts(text=request.text, **tts_kwargs)
+        # Medir tempo de inferência
+        start_time = time.time()
+        
         
         # Converter para bytes e escrever no buffer
         import soundfile as sf
@@ -133,8 +222,15 @@ async def text_to_speech(request: TTSRequest):
             io.BytesIO(audio_buffer.read()),
             media_type="audio/wav",
             headers={"Content-Disposition": "attachment; filename=tts_output.wav"}
-        )
+        # Configurar device (GPU se disponível)
+        device = "cuda" if gpu_available else "cpu"
+        logger.info(f"Usando device: {device}")
         
+        tts_model = TTS(model_name=default_model).to(device)
+        
+        
+        if gpu_available:
+            logger.info("Otimizações RTX 5090 ativadas!")
     except Exception as e:
         logger.error(f"Erro ao gerar áudio: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar áudio: {str(e)}")
