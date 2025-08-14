@@ -50,9 +50,8 @@ RUN pip install --no-cache-dir TTS==0.22.0
 
 # Instalar bibliotecas de monitoramento GPU
 RUN pip install --no-cache-dir \
-    nvidia-ml-py3==12.560.30 \
+    nvidia-ml-py3==11.525.112 \
     gputil==1.4.0 \
-    numba==0.58.1
 
 # Copiar código da aplicação
 COPY app/ .
