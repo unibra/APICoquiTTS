@@ -151,9 +151,6 @@ async def health_check():
         "gpu_available": gpu_available,
         "device": "cuda" if gpu_available else "cpu",
         "gpu_info": gpu_info
-        "gpu_available": gpu_available,
-        "device": "cuda" if gpu_available else "cpu",
-        "gpu_info": gpu_info
     }
 
 @app.get("/models")
@@ -210,13 +207,10 @@ async def text_to_speech(request: TTSRequest):
         if request.language:
             tts_kwargs["language"] = request.language
         if request.speed != 1.0:
-    use_gpu: Optional[bool] = True
-    speed: Optional[float] = 1.0
             tts_kwargs["speed"] = request.speed
         
         # Medir tempo de inferência
         start_time = time.time()
-        
         
         # Converter para bytes e escrever no buffer
         import soundfile as sf
@@ -230,15 +224,7 @@ async def text_to_speech(request: TTSRequest):
             io.BytesIO(audio_buffer.read()),
             media_type="audio/wav",
             headers={"Content-Disposition": "attachment; filename=tts_output.wav"}
-        # Configurar device (GPU se disponível)
-        device = "cuda" if gpu_available else "cpu"
-        logger.info(f"Usando device: {device}")
-        
-        tts_model = TTS(model_name=default_model).to(device)
-        
-        
-        if gpu_available:
-            logger.info("Otimizações RTX 5090 ativadas!")
+        )
     except Exception as e:
         logger.error(f"Erro ao gerar áudio: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar áudio: {str(e)}")
