@@ -1,22 +1,35 @@
 FROM python:3.11-slim
 
-# Instalar dependências básicas primeiro
-RUN apt-get update && apt-get install -y \
+# Configurar variáveis de ambiente para instalação não-interativa
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+# Atualizar sistema e instalar dependências básicas primeiro
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
     wget \
+    curl \
     gnupg2 \
     software-properties-common \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Instalar cuDNN 9.11.0 seguindo as instruções oficiais
-RUN wget https://developer.download.nvidia.com/compute/cudnn/9.11.0/local_installers/cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
+RUN wget -q https://developer.download.nvidia.com/compute/cudnn/9.11.0/local_installers/cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
     && dpkg -i cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
     && cp /var/cudnn-local-repo-ubuntu2204-9.11.0/cudnn-*-keyring.gpg /usr/share/keyrings/ \
-    && apt-get update \
-    && apt-get -y install cudnn-cuda-12 \
-    && rm cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends cudnn-cuda-12 \
+    && rm cudnn-local-repo-ubuntu2204-9.11.0_1.0-1_amd64.deb \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Instalar dependências do sistema para TTS
-RUN apt-get update && apt-get install -y \
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     make \
@@ -26,13 +39,13 @@ RUN apt-get update && apt-get install -y \
     libespeak1 \
     libespeak-dev \
     ffmpeg \
-    curl \
     build-essential \
     pkg-config \
     libssl-dev \
     libffi-dev \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Configurar variáveis de ambiente NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
@@ -42,7 +55,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 WORKDIR /app
 
 # Atualizar pip para versão mais recente
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copiar requirements primeiro (para cache de layers)
 COPY app/requirements.txt .
