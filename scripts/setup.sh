@@ -35,7 +35,7 @@ echo "🔍 Verificando saúde dos serviços..."
 if curl -f http://localhost:8888/health > /dev/null 2>&1; then
     echo "✅ API TTS está funcionando!"
     echo "📖 Documentação disponível em: http://localhost:8888/docs"
-    echo "🌐 Serviço disponível em: http://localhost"
+    echo "🌐 Serviço disponível em: http://localhost:8888"
 else
     echo "❌ Serviço não está respondendo. Verificando logs..."
     docker-compose logs tts-api

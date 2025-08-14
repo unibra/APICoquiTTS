@@ -47,7 +47,6 @@ Para usar com RTX 5090, certifique-se de ter:
 │   └── requirements.txt  # Dependências Python
 ├── Dockerfile            # Imagem Docker
 ├── docker-compose.yml    # Orquestração de containers
-├── nginx.conf           # Configuração do Nginx (proxy)
 └── README.md            # Este arquivo
 ```
 
@@ -75,16 +74,16 @@ docker-compose down
 
 ### 2. Acessar a API
 
-- **API Docs**: http://localhost/docs
-- **Health Check**: http://localhost/health
-- **Modelos Disponíveis**: http://localhost/models
+- **API Docs**: http://localhost:8888/docs
+- **Health Check**: http://localhost:8888/health
+- **Modelos Disponíveis**: http://localhost:8888/models
 
 ### 3. Usar o Endpoint TTS
 
 #### Exemplo com curl:
 
 ```bash
-curl -X POST "http://localhost/tts" \
+curl -X POST "http://localhost:8888/tts" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Olá, este é um teste do serviço TTS!",
@@ -98,7 +97,7 @@ curl -X POST "http://localhost/tts" \
 ```python
 import requests
 
-url = "http://localhost/tts"
+url = "http://localhost:8888/tts"
 data = {
     "text": "Olá mundo! Este é um teste do Coqui TTS.",
     "model_name": "tts_models/en/ljspeech/tacotron2-DDC"
@@ -173,17 +172,13 @@ docker run -p 8888:8888 coqui-tts-api
 
 1. **Modelo não carrega**: Verifique se há espaço suficiente em disco
 2. **Erro de dependências**: Rebuild a imagem Docker
-3. **Timeout**: Ajuste os timeouts no nginx.conf para textos longos
-4. **Memória insuficiente**: Aumente os recursos do Docker
+3. **Memória insuficiente**: Aumente os recursos do Docker
 
 ### Logs:
 
 ```bash
 # Ver logs da API
 docker-compose logs tts-api
-
-# Ver logs do Nginx
-docker-compose logs nginx
 ```
 
 ## Produção
@@ -192,9 +187,9 @@ Para produção, considere:
 
 - Usar um modelo TTS mais rápido
 - Implementar cache de áudio
-- Adicionar autenticação
+- Adicionar autenticação (pode ser feito via Cloudflare Access)
 - Configurar rate limiting
-- Usar HTTPS
+- Usar HTTPS (via Cloudflared tunnel)
 - Implementar métricas e monitoramento
 
 ## Licença
