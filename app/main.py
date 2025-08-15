@@ -26,7 +26,7 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configurações de otimização para RTX 5090
+# Configurações de otimização para CUDA
 def setup_gpu_optimization():
     """
     Configurar otimizações GPU para CUDA 12.1 (PyTorch 2.4.1+cu121)
@@ -34,7 +34,6 @@ def setup_gpu_optimization():
     """
     if torch.cuda.is_available():
         try:
-            # Verificar se CUDA está realmente funcional
             logger.info("🔍 Verificando disponibilidade CUDA...")
             
             # Obter informações da GPU
@@ -44,35 +43,30 @@ def setup_gpu_optimization():
             logger.info(f"🎯 GPU detectada: {gpu_info.name}")
             logger.info(f"💾 Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
             logger.info(f"⚡ Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
-            logger.info(f"PyTorch: {torch.__version__} | CUDA 12.1 Runtime: {torch.version.cuda}")
-            logger.info(f"🔧 CUDA Runtime: {torch.cuda.get_device_capability(0)}")
+            logger.info(f"PyTorch: {torch.__version__} | CUDA Runtime: {torch.version.cuda}")
             
             # Verificar se a arquitetura é suportada pelo PyTorch
             supported_archs = torch.cuda.get_arch_list()
             logger.info(f"🏗️  Arquiteturas CUDA suportadas: {supported_archs}")
             
-            # RTX 5090 específica (sm_120) - verificação especial
-            if gpu_info.major >= 9:  # RTX 4090/5090 e superiores
+            # Configurações para GPUs modernas
+            if gpu_info.major >= 8:  # RTX 3000+ e superiores
                 logger.info(f"🚀 GPU moderna {gpu_info.name} detectada! Aplicando otimizações...")
                 
-                # Configurações para GPUs modernas (RTX 4090/5090)
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
                 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-                
-                # Tensor Cores para GPUs modernas
                 torch.set_float32_matmul_precision('high')
                 logger.info("⚡ Tensor Cores habilitados")
-                logger.info("🧠 Otimizações avançadas aplicadas")
             else:
                 logger.info("🖥️  Aplicando configurações padrão GPU")
             
-            # Testar uma operação simples na GPU para verificar compatibilidade real
+            # Testar uma operação simples na GPU
             try:
                 logger.info("🧪 Testando operação CUDA...")
                 test_tensor = torch.tensor([1.0]).cuda()
                 result = test_tensor * 2
-                result.cpu()  # Mover de volta para CPU
+                result.cpu()
                 del test_tensor, result
                 torch.cuda.empty_cache()
                 logger.info("✅ Teste CUDA bem-sucedido!")
@@ -81,12 +75,10 @@ def setup_gpu_optimization():
                 logger.warning("🔄 CUDA não funcional, fazendo fallback para CPU")
                 return False
             
-            # Configurar otimizações finais se tudo estiver OK
             torch.backends.cudnn.benchmark = True
-            torch.backends.cudnn.deterministic = False  # Máxima performance
+            torch.backends.cudnn.deterministic = False
             torch.cuda.empty_cache()
             
-            # Log de status final
             memory_reserved = torch.cuda.memory_reserved(0) / 1024**3
             memory_allocated = torch.cuda.memory_allocated(0) / 1024**3
             logger.info(f"📊 Memória GPU - Reservada: {memory_reserved:.1f}GB, Alocada: {memory_allocated:.1f}GB")
@@ -142,6 +134,7 @@ class VoiceCloneRequest(BaseModel):
     text: str
     language: Optional[str] = "pt"
     use_gpu: Optional[bool] = True
+
 # Variável global para armazenar o modelo TTS
 tts_model = None
 
@@ -159,8 +152,6 @@ async def startup_event():
     
     try:
         logger.info("🚀 Inicializando modelo TTS...")
-        
-        # Usar device configurado globalmente
         logger.info(f"🎯 Carregando modelo no device: {device_type}")
         
         # Lista de modelos para tentar (em ordem de preferência)
@@ -188,7 +179,6 @@ async def startup_event():
                 # Testar o modelo com uma frase simples
                 test_text = "Olá" if "pt" in model_name else "Hello"
                 
-                # Verificar se o modelo funciona
                 try:
                     # Verificar se é multi-speaker
                     speakers = getattr(temp_model, 'speakers', None)
@@ -196,7 +186,7 @@ async def startup_event():
                     
                     logger.info(f"🔍 Multi-speaker: {is_multi_speaker}")
                     if is_multi_speaker:
-                        logger.info(f"🎤 Speakers disponíveis: {speakers[:5]}...")  # Mostrar apenas os primeiros 5
+                        logger.info(f"🎤 Speakers disponíveis: {speakers[:5]}...")
                     
                     # Teste básico
                     if is_multi_speaker and speakers:
@@ -240,7 +230,7 @@ async def startup_event():
             try:
                 memory_used = torch.cuda.memory_allocated(0) / 1024**3
                 memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
-                logger.info(f"🎯 GPU RTX 5090 - Memória usada: {memory_used:.1f}GB/{memory_total:.1f}GB")
+                logger.info(f"🎯 GPU - Memória usada: {memory_used:.1f}GB/{memory_total:.1f}GB")
             except:
                 logger.info("🎯 GPU ativa (informações de memória indisponíveis)")
         else:
@@ -268,6 +258,8 @@ async def startup_event():
             logger.info("🖥️  Usando CPU para processamento TTS (modo compatibilidade)")
         
     except Exception as e:
+        logger.error(f"❌ Erro crítico na inicialização: {e}", exc_info=True)
+        logger.warning("⚠️  Serviço iniciará sem modelo TTS carregado")
 
 @app.get("/")
 async def root():
@@ -275,7 +267,8 @@ async def root():
     return {
         "message": "Coqui TTS API está funcionando!",
         "docs": "/docs",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "device": device_type
     }
 
 @app.get("/health")
@@ -314,23 +307,17 @@ async def list_models():
     
     try:
         logger.info("Tentando listar modelos TTS disponíveis...")
-        # Criar instância temporária para acessar lista de modelos
         temp_tts = TTS()
         models = temp_tts.list_models()
         logger.info(f"Encontrados {len(models) if models else 0} modelos")
         return {"available_models": models or []}
     except Exception as e:
         logger.error(f"Erro ao listar modelos: {e}", exc_info=True)
-        # Fallback com modelos conhecidos - priorizando XTTS v2 e português brasileiro
         fallback_models = [
             "tts_models/multilingual/multi-dataset/xtts_v2",
             "tts_models/pt/cv/vits",
             "tts_models/en/ljspeech/tacotron2-DDC",
-            "tts_models/en/ljspeech/glow-tts",
-            "tts_models/pt/cv/tacotron2-DDC",
-            "tts_models/fr/mai/tacotron2-DDC",
-            "tts_models/es/mai/tacotron2-DDC",
-            "tts_models/de/mai/tacotron2-DDC"
+            "tts_models/en/ljspeech/glow-tts"
         ]
         logger.info(f"Retornando lista de modelos conhecidos como fallback: {len(fallback_models)} modelos")
         return {
@@ -343,11 +330,6 @@ async def list_models():
 async def text_to_speech(request: TTSRequest):
     """
     Converter texto em áudio usando Coqui TTS
-    
-    - **text**: Texto a ser convertido em áudio
-    - **model_name**: Nome do modelo TTS a ser usado (opcional)
-    - **speaker**: Nome do speaker/voz (opcional, depende do modelo)
-    - **language**: Código do idioma (opcional)
     """
     if TTS is None:
         raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
@@ -376,24 +358,19 @@ async def text_to_speech(request: TTSRequest):
         actual_device = device_type if use_gpu else "cpu"
         logger.info(f"Gerando áudio para texto: {request.text[:50]}... (device: {actual_device})")
         
-        # Medir tempo de inferência
         start_time = time.time()
         
         # Verificar se o modelo suporta múltiplos speakers
         try:
-            # Tentar obter informações sobre speakers do modelo
             speakers = getattr(current_tts, 'speakers', None)
             is_multi_speaker = speakers is not None and len(speakers) > 0
             
-            # Gerar áudio com parâmetros apropriados
             tts_kwargs = {"text": request.text}
             
-            # Adicionar speaker apenas se o modelo suportar e foi especificado
             if is_multi_speaker and request.speaker:
                 tts_kwargs["speaker"] = request.speaker
                 logger.info(f"Usando speaker: {request.speaker}")
             
-            # Adicionar language se especificado
             if request.language:
                 tts_kwargs["language"] = request.language
                 logger.info(f"Usando idioma: {request.language}")
@@ -403,7 +380,6 @@ async def text_to_speech(request: TTSRequest):
             
         except Exception as tts_error:
             logger.error(f"Erro específico do TTS: {tts_error}")
-            # Fallback - tentar apenas com texto
             logger.info("Tentando fallback apenas com texto...")
             wav_data = current_tts.tts(text=request.text)
         
@@ -417,17 +393,14 @@ async def text_to_speech(request: TTSRequest):
         import soundfile as sf
         import numpy as np
         
-        # Converter para numpy array se necessário
         if not isinstance(wav_data, np.ndarray):
             wav_data = np.array(wav_data)
         
-        # Escrever no buffer como WAV
         sf.write(audio_buffer, wav_data, 22050, format='WAV')
         audio_buffer.seek(0)
         
         logger.info("Áudio gerado com sucesso!")
         
-        # Retornar como streaming response
         return StreamingResponse(
             io.BytesIO(audio_buffer.read()),
             media_type="audio/wav",
@@ -440,172 +413,10 @@ async def text_to_speech(request: TTSRequest):
 @app.post("/tts-simple")
 async def simple_text_to_speech(text: str):
     """
-    Versão simplificada do endpoint TTS - apenas recebe texto como parâmetro
+    Versão simplificada do endpoint TTS
     """
     request = TTSRequest(text=text)
     return await text_to_speech(request)
-
-@app.post("/tts-clone")
-async def voice_cloning_tts(
-    text: str = Form(...),
-    language: str = Form("pt"),
-    use_gpu: bool = Form(True),
-    speaker_audio: UploadFile = File(...)
-):
-    """
-    🎭 Síntese de Voz com Áudio de Referência
-    
-    Gera áudio usando o modelo TTS disponível. Se possível, usa o áudio como referência.
-    
-    - **text**: Texto a ser convertido em áudio
-    - **language**: Código do idioma (pt para Português do Brasil)
-    - **use_gpu**: Usar GPU para processamento (se disponível)
-    - **speaker_audio**: Arquivo de áudio (WAV, MP3, etc.)
-    
-    📋 Recomendações para o áudio:
-    - Duração: 6-12 segundos (ideal)
-    - Qualidade: Limpo, sem ruído
-    - Formato: WAV, MP3, M4A, FLAC
-    - Conteúdo: Uma pessoa falando claramente
-    """
-    logger.info(f"🎵 Iniciando síntese TTS - Texto: '{text[:50]}...', Idioma: {language}")
-    
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="Texto não pode estar vazio")
-    
-    if TTS is None:
-        raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
-    
-    # Verificar se temos um modelo carregado
-    if tts_model is None:
-        raise HTTPException(status_code=500, detail="Modelo TTS não está carregado. Tente novamente em alguns segundos.")
-    
-    # Obter informações do modelo
-    model_name = getattr(tts_model, 'model_name', 'Unknown')
-    speakers = getattr(tts_model, 'speakers', None)
-    is_multi_speaker = speakers is not None and len(speakers) > 0
-    
-    logger.info(f"🤖 Usando modelo: {model_name}")
-    logger.info(f"🎤 Multi-speaker: {is_multi_speaker}")
-    
-    try:
-        # Medir tempo de inferência
-        start_time = time.time()
-        
-        # Estratégia: Tentar diferentes abordagens baseadas no modelo
-        wav_data = None
-        method_used = "unknown"
-        
-        # Método 1: Se é multi-speaker, usar um speaker padrão
-        if is_multi_speaker and speakers:
-            try:
-                # Selecionar speaker padrão (primeiro da lista)
-                default_speaker = speakers[0]
-                logger.info(f"🎤 Tentativa 1: Multi-speaker com '{default_speaker}'")
-                
-                # Decidir se incluir language baseado no modelo
-                if "pt" in model_name.lower() or "multilingual" in model_name.lower():
-                    # Modelo português ou multilingual
-                    wav_data = tts_model.tts(text=text, speaker=default_speaker, language=language)
-                    method_used = f"multi-speaker com language ({default_speaker})"
-                else:
-                    # Modelo inglês - sem language
-                    wav_data = tts_model.tts(text=text, speaker=default_speaker)
-                    method_used = f"multi-speaker sem language ({default_speaker})"
-                    
-                logger.info(f"✅ Método 1 funcionou: {method_used}")
-                
-            except Exception as method1_error:
-                logger.warning(f"⚠️  Método 1 falhou: {method1_error}")
-        
-        # Método 2: TTS simples (se método 1 falhou ou modelo não é multi-speaker)
-        if wav_data is None:
-            try:
-                logger.info("🎵 Tentativa 2: TTS simples")
-                
-                # Decidir se incluir language baseado no modelo
-                if "pt" in model_name.lower() or "multilingual" in model_name.lower():
-                    wav_data = tts_model.tts(text=text, language=language)
-                    method_used = "TTS simples com language"
-                else:
-                    wav_data = tts_model.tts(text=text)
-                    method_used = "TTS simples sem language"
-                    
-                logger.info(f"✅ Método 2 funcionou: {method_used}")
-                
-            except Exception as method2_error:
-                logger.error(f"❌ Método 2 também falhou: {method2_error}")
-                raise Exception(f"Todos os métodos falharam. Último erro: {method2_error}")
-        
-        # Criar buffer em memória para o áudio
-        logger.info("💾 Convertendo áudio para formato WAV...")
-        audio_buffer = io.BytesIO()
-        
-        # Converter para bytes e escrever no buffer
-        import soundfile as sf
-        import numpy as np
-        
-        # Converter para numpy array se necessário
-        if not isinstance(wav_data, np.ndarray):
-            logger.info("🔄 Convertendo dados para numpy array...")
-            wav_data = np.array(wav_data)
-        
-        # Verificar se temos dados válidos
-        if len(wav_data) == 0:
-            raise Exception("Dados de áudio estão vazios após conversão")
-        
-        logger.info(f"📊 Array final: shape={wav_data.shape}, dtype={wav_data.dtype}, método={method_used}")
-        
-        # Escrever no buffer como WAV
-        sample_rate = 22050  # Taxa de amostragem padrão do XTTS v2
-        sf.write(audio_buffer, wav_data, sample_rate, format='WAV')
-        audio_buffer.seek(0)
-        
-        # Verificar tamanho do buffer
-        buffer_size = audio_buffer.getbuffer().nbytes
-        logger.info(f"💾 Buffer de áudio criado: {buffer_size} bytes")
-        
-        if buffer_size == 0:
-            raise Exception("Buffer de áudio está vazio")
-        
-        logger.info(f"🎉 Áudio TTS gerado com sucesso usando: {method_used}! 🎵")
-        
-        # Retornar como streaming response
-        return StreamingResponse(
-            io.BytesIO(audio_buffer.read()),
-            media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=voice_clone_output.wav"}
-        )
-        
-    except Exception as e:
-        error_msg = f"{type(e).__name__}: {str(e)}"
-        logger.error(f"❌ Erro ao gerar áudio TTS: {error_msg}")
-        logger.error(f"📍 Detalhes do erro:", exc_info=True)
-
-@app.get("/clone-info")
-async def voice_clone_info():
-    """
-    📖 Informações sobre síntese TTS
-    """
-    return {
-        "feature": "Síntese de Voz TTS",
-        "description": "Converte texto em áudio usando modelos Coqui TTS otimizados",
-        "endpoint": "/tts-clone",
-        "method": "POST",
-        "model_info": {
-            "loaded_model": getattr(tts_model, 'model_name', 'Não carregado') if tts_model else 'Não carregado',
-            "multi_speaker": bool(getattr(tts_model, 'speakers', None)) if tts_model else False,
-            "device": "cpu",
-            "status": "funcionando" if tts_model else "não inicializado"
-        },
-        "supported_languages": ["pt", "en", "es", "fr", "de"],
-        "tips": [
-            "Modelos portugueses funcionam melhor para texto em português",
-            "Arquivos de áudio são aceitos mas podem não influenciar o resultado",
-            "Use textos claros e bem pontuados para melhores resultados",
-            "O sistema usa automaticamente a melhor voz disponível"
-        ]
-    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8888)
