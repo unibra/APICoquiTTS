@@ -126,24 +126,40 @@ async def startup_event():
         logger.error("Coqui TTS não está instalado. Instale com: pip install TTS")
         return
     
+    # Configurar variáveis de ambiente para aceitar licença automaticamente
+    os.environ['COQUI_TOS_AGREED'] = '1'
+    
     try:
         # Inicializar com modelo XTTS v2 para Português do Brasil
         default_model = "tts_models/multilingual/multi-dataset/xtts_v2"
         logger.info(f"Carregando modelo TTS: {default_model}")
         
         # Configurar device (GPU se disponível)
-        device = "cuda" if gpu_available else "cpu"
+        # Forçar CPU por enquanto devido à incompatibilidade CUDA com RTX 5090
+        device = "cpu"  # Temporary fallback
         logger.info(f"Usando device: {device}")
         
-        tts_model = TTS(model_name=default_model).to(device)
+        logger.info("Inicializando modelo TTS (pode demorar alguns minutos)...")
+        tts_model = TTS(model_name=default_model, progress_bar=True).to(device)
         logger.info("Modelo XTTS v2 para Português do Brasil carregado com sucesso!")
         
-        if gpu_available:
-            logger.info("Otimizações GPU ativadas!")
+        if device == "cuda":
+            logger.info("🚀 Otimizações GPU ativadas!")
         else:
-            logger.info("Usando CPU para processamento TTS")
+            logger.info("🖥️  Usando CPU para processamento TTS (compatibilidade RTX 5090)")
+            
     except Exception as e:
         logger.error(f"Erro ao carregar modelo TTS: {e}")
+        logger.error("Detalhes do erro:", exc_info=True)
+        
+        # Tentar fallback com modelo mais simples
+        try:
+            logger.info("Tentando modelo fallback...")
+            fallback_model = "tts_models/en/ljspeech/tacotron2-DDC"
+            tts_model = TTS(model_name=fallback_model).to("cpu")
+            logger.info("Modelo fallback carregado com sucesso!")
+        except Exception as fallback_error:
+            logger.error(f"Erro no modelo fallback: {fallback_error}")
 
 @app.get("/")
 async def root():

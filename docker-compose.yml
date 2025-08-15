@@ -8,6 +8,7 @@ services:
     runtime: nvidia
     environment:
       - PYTHONUNBUFFERED=1
+      - COQUI_TOS_AGREED=1
       - DEBUG=False
       - LOG_LEVEL=INFO
       - TTS_CACHE_PATH=/app/models
