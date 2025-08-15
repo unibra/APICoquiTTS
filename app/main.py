@@ -175,11 +175,28 @@ async def list_models():
         raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
     
     try:
+        logger.info("Tentando listar modelos TTS disponíveis...")
         models = TTS.list_models()
-        return {"available_models": models}
+        logger.info(f"Encontrados {len(models) if models else 0} modelos")
+        return {"available_models": models or []}
     except Exception as e:
-        logger.error(f"Erro ao listar modelos: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao listar modelos")
+        logger.error(f"Erro ao listar modelos: {e}", exc_info=True)
+        # Fallback com modelos conhecidos
+        fallback_models = [
+            "tts_models/en/ljspeech/tacotron2-DDC",
+            "tts_models/en/ljspeech/glow-tts",
+            "tts_models/en/ljspeech/speedy-speech",
+            "tts_models/pt/cv/vits",
+            "tts_models/es/mai/tacotron2-DDC",
+            "tts_models/fr/mai/tacotron2-DDC",
+            "tts_models/de/mai/tacotron2-DDC"
+        ]
+        logger.info(f"Retornando lista de modelos conhecidos como fallback: {len(fallback_models)} modelos")
+        return {
+            "available_models": fallback_models,
+            "note": "Lista de fallback - alguns modelos podem não estar disponíveis",
+            "error": str(e)
+        }
 
 @app.post("/tts")
 async def text_to_speech(request: TTSRequest):
