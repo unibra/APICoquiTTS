@@ -337,52 +337,108 @@ async def voice_cloning_tts(
     - Formato: WAV, MP3, M4A, FLAC
     - Conteúdo: Apenas uma pessoa falando
     """
+    logger.info(f"🎭 Iniciando clone de voz - Texto: '{text[:50]}...', Idioma: {language}")
+    
     if not text.strip():
         raise HTTPException(status_code=400, detail="Texto não pode estar vazio")
     
     if TTS is None:
         raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
     
+    # Verificar se temos um modelo carregado
+    if tts_model is None:
+        raise HTTPException(status_code=500, detail="Modelo TTS não está carregado. Tente novamente em alguns segundos.")
+    
     # Validar tipo de arquivo
-    if not speaker_audio.content_type or not speaker_audio.content_type.startswith('audio/'):
-        raise HTTPException(
-            status_code=400, 
-            detail="Arquivo deve ser de áudio (WAV, MP3, M4A, FLAC, etc.)"
-        )
+    logger.info(f"📁 Arquivo recebido - Nome: {speaker_audio.filename}, Tipo: {speaker_audio.content_type}, Tamanho: {speaker_audio.size if hasattr(speaker_audio, 'size') else 'Desconhecido'}")
+    
+    # Verificar extensão do arquivo se o content_type não estiver disponível
+    valid_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg', '.aac']
+    if speaker_audio.filename:
+        file_ext = Path(speaker_audio.filename).suffix.lower()
+        if not (speaker_audio.content_type and speaker_audio.content_type.startswith('audio/')) and file_ext not in valid_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Arquivo deve ser de áudio. Extensões suportadas: {', '.join(valid_extensions)}"
+            )
     
     # Criar arquivo temporário para o áudio de referência
     temp_audio_path = None
     try:
+        logger.info("📁 Criando arquivo temporário para áudio de referência...")
+        
         # Criar arquivo temporário
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+        file_suffix = Path(speaker_audio.filename).suffix if speaker_audio.filename else '.wav'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_suffix) as temp_file:
+            logger.info(f"📁 Copiando conteúdo para: {temp_file.name}")
             # Copiar conteúdo do upload para o arquivo temporário
             shutil.copyfileobj(speaker_audio.file, temp_file)
             temp_audio_path = temp_file.name
         
-        logger.info(f"Arquivo de áudio salvo temporariamente em: {temp_audio_path}")
-        logger.info(f"Gerando clone de voz para: {text[:50]}...")
+        # Verificar se o arquivo foi criado e tem conteúdo
+        if not Path(temp_audio_path).exists():
+            raise Exception("Falha ao criar arquivo temporário")
         
-        # Usar modelo global (XTTS v2)
-        if tts_model is None:
-            raise HTTPException(status_code=500, detail="Modelo TTS não está carregado")
+        file_size = Path(temp_audio_path).stat().st_size
+        logger.info(f"✅ Arquivo temporário criado: {temp_audio_path} (tamanho: {file_size} bytes)")
+        
+        if file_size == 0:
+            raise Exception("Arquivo de áudio está vazio")
+        
+        logger.info(f"🎭 Gerando clone de voz para: '{text[:50]}...'")
+        
+        # Verificar se o modelo suporta clonagem de voz
+        model_name = getattr(tts_model, 'model_name', 'Unknown')
+        logger.info(f"🤖 Usando modelo: {model_name}")
+        
+        # Verificar se é XTTS v2 ou modelo compatível
+        if 'xtts' not in model_name.lower():
+            logger.warning(f"⚠️  Modelo atual ({model_name}) pode não suportar clonagem de voz otimamente")
         
         # Medir tempo de inferência
         start_time = time.time()
         
-        # Gerar áudio com clonagem de voz
-        logger.info(f"Parâmetros: text='{text[:30]}...', language='{language}', speaker_wav='{temp_audio_path}'")
+        logger.info(f"🔧 Parâmetros TTS:")
+        logger.info(f"   - Texto: '{text[:50]}...'")
+        logger.info(f"   - Idioma: {language}")
+        logger.info(f"   - Arquivo de referência: {temp_audio_path}")
+        logger.info(f"   - Device: {'cuda' if gpu_available else 'cpu'}")
         
-        # XTTS v2 suporta clonagem com speaker_wav
-        wav_data = tts_model.tts(
-            text=text,
-            speaker_wav=temp_audio_path,
-            language=language
-        )
+        try:
+            # XTTS v2 suporta clonagem com speaker_wav
+            logger.info("🎵 Executando síntese TTS com clonagem...")
+            wav_data = tts_model.tts(
+                text=text,
+                speaker_wav=temp_audio_path,
+                language=language
+            )
+            logger.info("✅ Síntese TTS concluída com sucesso!")
+            
+        except Exception as tts_error:
+            logger.error(f"❌ Erro na síntese TTS: {type(tts_error).__name__}: {str(tts_error)}")
+            # Tentar fallback sem especificar language
+            logger.info("🔄 Tentando fallback sem parâmetro language...")
+            try:
+                wav_data = tts_model.tts(
+                    text=text,
+                    speaker_wav=temp_audio_path
+                )
+                logger.info("✅ Fallback bem-sucedido!")
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback também falhou: {type(fallback_error).__name__}: {str(fallback_error)}")
+                raise Exception(f"Erro na síntese TTS: {str(tts_error)}. Fallback: {str(fallback_error)}")
         
         inference_time = time.time() - start_time
-        logger.info(f"Clone de voz gerado em {inference_time:.2f} segundos")
+        logger.info(f"⏱️  Áudio gerado em {inference_time:.2f} segundos")
+        
+        # Verificar se temos dados de áudio
+        if wav_data is None:
+            raise Exception("Modelo retornou dados vazios")
+        
+        logger.info(f"📊 Dados de áudio: tipo={type(wav_data)}, shape={getattr(wav_data, 'shape', 'N/A')}")
         
         # Criar buffer em memória para o áudio
+        logger.info("💾 Convertendo áudio para formato WAV...")
         audio_buffer = io.BytesIO()
         
         # Converter para bytes e escrever no buffer
@@ -391,13 +447,28 @@ async def voice_cloning_tts(
         
         # Converter para numpy array se necessário
         if not isinstance(wav_data, np.ndarray):
+            logger.info("🔄 Convertendo dados para numpy array...")
             wav_data = np.array(wav_data)
         
+        # Verificar se temos dados válidos
+        if len(wav_data) == 0:
+            raise Exception("Dados de áudio estão vazios após conversão")
+        
+        logger.info(f"📊 Array final: shape={wav_data.shape}, dtype={wav_data.dtype}")
+        
         # Escrever no buffer como WAV
-        sf.write(audio_buffer, wav_data, 22050, format='WAV')
+        sample_rate = 22050  # Taxa de amostragem padrão do XTTS v2
+        sf.write(audio_buffer, wav_data, sample_rate, format='WAV')
         audio_buffer.seek(0)
         
-        logger.info("Clone de voz gerado com sucesso! 🎭")
+        # Verificar tamanho do buffer
+        buffer_size = audio_buffer.getbuffer().nbytes
+        logger.info(f"💾 Buffer de áudio criado: {buffer_size} bytes")
+        
+        if buffer_size == 0:
+            raise Exception("Buffer de áudio está vazio")
+        
+        logger.info("🎉 Clone de voz gerado com sucesso! 🎭")
         
         # Retornar como streaming response
         return StreamingResponse(
@@ -407,17 +478,19 @@ async def voice_cloning_tts(
         )
         
     except Exception as e:
-        logger.error(f"Erro ao gerar clone de voz: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar clone de voz: {str(e)}")
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"❌ Erro ao gerar clone de voz: {error_msg}")
+        logger.error(f"📍 Detalhes do erro:", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar clone de voz: {error_msg}")
     
     finally:
         # Limpar arquivo temporário
         if temp_audio_path and Path(temp_audio_path).exists():
             try:
                 Path(temp_audio_path).unlink()
-                logger.info(f"Arquivo temporário removido: {temp_audio_path}")
+                logger.info(f"🗑️  Arquivo temporário removido: {temp_audio_path}")
             except Exception as e:
-                logger.warning(f"Erro ao remover arquivo temporário: {e}")
+                logger.warning(f"⚠️  Erro ao remover arquivo temporário: {e}")
 
 @app.get("/clone-info")
 async def voice_clone_info():
