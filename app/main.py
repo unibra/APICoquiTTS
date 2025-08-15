@@ -314,5 +314,154 @@ async def simple_text_to_speech(text: str):
     request = TTSRequest(text=text)
     return await text_to_speech(request)
 
+@app.post("/tts-clone")
+async def voice_cloning_tts(
+    text: str = Form(...),
+    language: str = Form("pt"),
+    use_gpu: bool = Form(True),
+    speaker_audio: UploadFile = File(...)
+):
+    """
+    🎭 Clone de Voz com XTTS v2
+    
+    Gera áudio usando a voz de referência fornecida (zero-shot voice cloning).
+    
+    - **text**: Texto a ser convertido em áudio
+    - **language**: Código do idioma (pt para Português do Brasil)
+    - **use_gpu**: Usar GPU para processamento (se disponível)
+    - **speaker_audio**: Arquivo de áudio com a voz de referência (WAV, MP3, etc.)
+    
+    📋 Requisitos para o áudio de referência:
+    - Duração: 6-12 segundos (ideal)
+    - Qualidade: Limpo, sem ruído
+    - Formato: WAV, MP3, M4A, FLAC
+    - Conteúdo: Apenas uma pessoa falando
+    """
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Texto não pode estar vazio")
+    
+    if TTS is None:
+        raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
+    
+    # Validar tipo de arquivo
+    if not speaker_audio.content_type or not speaker_audio.content_type.startswith('audio/'):
+        raise HTTPException(
+            status_code=400, 
+            detail="Arquivo deve ser de áudio (WAV, MP3, M4A, FLAC, etc.)"
+        )
+    
+    # Criar arquivo temporário para o áudio de referência
+    temp_audio_path = None
+    try:
+        # Criar arquivo temporário
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            # Copiar conteúdo do upload para o arquivo temporário
+            shutil.copyfileobj(speaker_audio.file, temp_file)
+            temp_audio_path = temp_file.name
+        
+        logger.info(f"Arquivo de áudio salvo temporariamente em: {temp_audio_path}")
+        logger.info(f"Gerando clone de voz para: {text[:50]}...")
+        
+        # Usar modelo global (XTTS v2)
+        if tts_model is None:
+            raise HTTPException(status_code=500, detail="Modelo TTS não está carregado")
+        
+        # Medir tempo de inferência
+        start_time = time.time()
+        
+        # Gerar áudio com clonagem de voz
+        logger.info(f"Parâmetros: text='{text[:30]}...', language='{language}', speaker_wav='{temp_audio_path}'")
+        
+        # XTTS v2 suporta clonagem com speaker_wav
+        wav_data = tts_model.tts(
+            text=text,
+            speaker_wav=temp_audio_path,
+            language=language
+        )
+        
+        inference_time = time.time() - start_time
+        logger.info(f"Clone de voz gerado em {inference_time:.2f} segundos")
+        
+        # Criar buffer em memória para o áudio
+        audio_buffer = io.BytesIO()
+        
+        # Converter para bytes e escrever no buffer
+        import soundfile as sf
+        import numpy as np
+        
+        # Converter para numpy array se necessário
+        if not isinstance(wav_data, np.ndarray):
+            wav_data = np.array(wav_data)
+        
+        # Escrever no buffer como WAV
+        sf.write(audio_buffer, wav_data, 22050, format='WAV')
+        audio_buffer.seek(0)
+        
+        logger.info("Clone de voz gerado com sucesso! 🎭")
+        
+        # Retornar como streaming response
+        return StreamingResponse(
+            io.BytesIO(audio_buffer.read()),
+            media_type="audio/wav",
+            headers={"Content-Disposition": "attachment; filename=voice_clone_output.wav"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar clone de voz: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar clone de voz: {str(e)}")
+    
+    finally:
+        # Limpar arquivo temporário
+        if temp_audio_path and Path(temp_audio_path).exists():
+            try:
+                Path(temp_audio_path).unlink()
+                logger.info(f"Arquivo temporário removido: {temp_audio_path}")
+            except Exception as e:
+                logger.warning(f"Erro ao remover arquivo temporário: {e}")
+
+@app.get("/clone-info")
+async def voice_clone_info():
+    """
+    📖 Informações sobre a funcionalidade de clonagem de voz
+    """
+    return {
+        "feature": "Voice Cloning com XTTS v2",
+        "description": "Clone qualquer voz usando apenas 6-12 segundos de áudio de referência",
+        "endpoint": "/tts-clone",
+        "method": "POST",
+        "supported_languages": [
+            "pt - Português (Brasil)",
+            "en - English",
+            "es - Español", 
+            "fr - Français",
+            "de - Deutsch",
+            "it - Italiano",
+            "ja - 日本語",
+            "ko - 한국어",
+            "zh - 中文",
+            "ar - العربية",
+            "tr - Türkçe",
+            "pl - Polski",
+            "nl - Nederlands",
+            "cs - Čeština",
+            "ru - Русский",
+            "hu - Magyar",
+            "hi - हिन्दी"
+        ],
+        "audio_requirements": {
+            "duration": "6-12 segundos (ideal)",
+            "quality": "Limpo, sem ruído de fundo",
+            "formats": ["WAV", "MP3", "M4A", "FLAC"],
+            "content": "Apenas uma pessoa falando",
+            "language_match": "Preferencialmente no mesmo idioma de saída"
+        },
+        "tips": [
+            "Use áudios com boa qualidade para melhores resultados",
+            "Evite música ou ruído de fundo no áudio de referência",
+            "6-12 segundos é o tempo ideal - nem muito curto, nem muito longo",
+            "A voz clonada funcionará melhor no mesmo idioma do áudio original"
+        ]
+    }
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8888)
