@@ -26,32 +26,61 @@ logger = logging.getLogger(__name__)
 def setup_gpu_optimization():
     """Configurar otimizações específicas para RTX 5090"""
     if torch.cuda.is_available():
-        # Configurar para RTX 5090 (Ada Lovelace architecture)
-        torch.backends.cudnn.benchmark = True
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        
-        # Otimizações de memória
-        torch.cuda.empty_cache()
-        
-        # Configurações específicas do ambiente
-        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
-        os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Para performance
-        
-        # Configurar precision otimizada
-        torch.set_float32_matmul_precision('high')
-        torch.cuda.empty_cache()
-        
-        # Log das configurações GPU
-        gpu_info = torch.cuda.get_device_properties(0)
-        logger.info(f"GPU detectada: {gpu_info.name}")
-        logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
-        logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor}")
-        logger.info(f"CUDA Version: {torch.version.cuda}")
-        logger.info(f"PyTorch CUDA available: {torch.cuda.is_available()}")
-        logger.info(f"CUDA device count: {torch.cuda.device_count()}")
-        
-        return True
+        try:
+            # Obter informações da GPU
+            gpu_info = torch.cuda.get_device_properties(0)
+            compute_capability = f"sm_{gpu_info.major}{gpu_info.minor}"
+            
+            logger.info(f"GPU detectada: {gpu_info.name}")
+            logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
+            logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
+            logger.info(f"CUDA Version: {torch.version.cuda}")
+            
+            # Verificar se a arquitetura é suportada pelo PyTorch
+            supported_archs = torch.cuda.get_arch_list()
+            logger.info(f"Arquiteturas CUDA suportadas pelo PyTorch: {supported_archs}")
+            
+            # Verificar se a capacidade computacional está nas arquiteturas suportadas
+            arch_supported = any(compute_capability in arch for arch in supported_archs)
+            
+            if not arch_supported:
+                logger.warning(f"⚠️  Arquitetura {compute_capability} não está explicitamente suportada")
+                logger.warning("🔄 Fazendo fallback para CPU para evitar erros CUDA")
+                return False
+            
+            # Testar uma operação simples na GPU para verificar compatibilidade real
+            try:
+                test_tensor = torch.tensor([1.0]).cuda()
+                result = test_tensor * 2
+                result.cpu()  # Mover de volta para CPU
+                del test_tensor, result
+                torch.cuda.empty_cache()
+                logger.info("✅ Teste CUDA bem-sucedido!")
+            except Exception as cuda_test_error:
+                logger.error(f"❌ Teste CUDA falhou: {cuda_test_error}")
+                logger.warning("🔄 Fazendo fallback para CPU")
+                return False
+            
+            # Configurar otimizações GPU se tudo estiver OK
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            
+            # Configurações específicas do ambiente
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+            os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Para performance
+            
+            # Configurar precision otimizada
+            torch.set_float32_matmul_precision('high')
+            torch.cuda.empty_cache()
+            
+            logger.info("🚀 Otimizações GPU ativadas com sucesso!")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao configurar GPU: {e}")
+            logger.warning("🔄 Fazendo fallback para CPU")
+            return False
     return False
 
 # Configurar GPU na inicialização
