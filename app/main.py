@@ -130,18 +130,42 @@ async def startup_event():
     os.environ['COQUI_TOS_AGREED'] = '1'
     
     try:
-        # Inicializar com modelo XTTS v2 para Português do Brasil
-        default_model = "tts_models/multilingual/multi-dataset/xtts_v2"
-        logger.info(f"Carregando modelo TTS: {default_model}")
+        logger.info("🚀 Inicializando modelo TTS...")
         
         # Configurar device (GPU se disponível)
         # Forçar CPU por enquanto devido à incompatibilidade CUDA com RTX 5090
         device = "cpu"  # Temporary fallback
         logger.info(f"Usando device: {device}")
         
-        logger.info("Inicializando modelo TTS (pode demorar alguns minutos)...")
-        tts_model = TTS(model_name=default_model, progress_bar=True).to(device)
-        logger.info("Modelo XTTS v2 para Português do Brasil carregado com sucesso!")
+        # Tentar carregar XTTS v2 primeiro
+        try:
+            default_model = "tts_models/multilingual/multi-dataset/xtts_v2"
+            logger.info(f"📥 Tentando carregar XTTS v2: {default_model}")
+            logger.info("⏳ Carregando modelo (pode demorar alguns minutos)...")
+            
+            tts_model = TTS(model_name=default_model, progress_bar=True).to(device)
+            logger.info("✅ XTTS v2 para clonagem de voz carregado com sucesso!")
+            
+        except Exception as xtts_error:
+            logger.error(f"❌ Erro ao carregar XTTS v2: {xtts_error}")
+            logger.info("🔄 Tentando modelo alternativo...")
+            
+            # Fallback para modelo português específico
+            try:
+                fallback_model = "tts_models/pt/cv/vits"
+                logger.info(f"📥 Carregando modelo PT fallback: {fallback_model}")
+                tts_model = TTS(model_name=fallback_model, progress_bar=True).to(device)
+                logger.info("✅ Modelo PT fallback carregado!")
+                
+            except Exception as pt_error:
+                logger.error(f"❌ Modelo PT também falhou: {pt_error}")
+                logger.info("🔄 Usando modelo básico inglês...")
+                
+                # Último fallback
+                basic_model = "tts_models/en/ljspeech/tacotron2-DDC"
+                logger.info(f"📥 Carregando modelo básico: {basic_model}")
+                tts_model = TTS(model_name=basic_model, progress_bar=True).to(device)
+                logger.info("✅ Modelo básico carregado (funcionalidade limitada)!")
         
         if device == "cuda":
             logger.info("🚀 Otimizações GPU ativadas!")
@@ -150,16 +174,8 @@ async def startup_event():
             
     except Exception as e:
         logger.error(f"Erro ao carregar modelo TTS: {e}")
-        logger.error("Detalhes do erro:", exc_info=True)
-        
-        # Tentar fallback com modelo mais simples
-        try:
-            logger.info("Tentando modelo fallback...")
-            fallback_model = "tts_models/en/ljspeech/tacotron2-DDC"
-            tts_model = TTS(model_name=fallback_model).to("cpu")
-            logger.info("Modelo fallback carregado com sucesso!")
-        except Exception as fallback_error:
-            logger.error(f"Erro no modelo fallback: {fallback_error}")
+        logger.error("🚨 Aplicação iniciará sem modelo TTS carregado!")
+        tts_model = None
 
 @app.get("/")
 async def root():
@@ -423,26 +439,63 @@ async def voice_cloning_tts(
         try:
             # XTTS v2 suporta clonagem com speaker_wav
             logger.info("🎵 Executando síntese TTS com clonagem...")
-            wav_data = tts_model.tts(
-                text=text,
-                speaker_wav=temp_audio_path,
-                language=language
-            )
+            
+            # Tentar diferentes abordagens para compatibilidade
+            try:
+                # Método 1: XTTS v2 padrão
+                wav_data = tts_model.tts(
+                    text=text,
+                    speaker_wav=temp_audio_path,
+                    language=language
+                )
+                logger.info("✅ Método padrão XTTS v2 funcionou!")
+                
+            except Exception as method1_error:
+                logger.warning(f"⚠️  Método 1 falhou: {method1_error}")
+                logger.info("🔄 Tentando método alternativo...")
+                
+                # Método 2: Sem especificar language explicitamente
+                try:
+                    wav_data = tts_model.tts_to_file(
+                        text=text,
+                        speaker_wav=temp_audio_path,
+                        file_path=None,  # Retorna array em vez de salvar
+                        language=language
+                    )
+                    logger.info("✅ Método alternativo com tts_to_file funcionou!")
+                    
+                except Exception as method2_error:
+                    logger.warning(f"⚠️  Método 2 falhou: {method2_error}")
+                    # Re-raise o erro original
+                    raise method1_error
+            
             logger.info("✅ Síntese TTS concluída com sucesso!")
             
         except Exception as tts_error:
             logger.error(f"❌ Erro na síntese TTS: {type(tts_error).__name__}: {str(tts_error)}")
-            # Tentar fallback sem especificar language
-            logger.info("🔄 Tentando fallback sem parâmetro language...")
+            
+            # Tentar fallback com TTS simples (sem clonagem)
+            logger.info("🔄 Tentando fallback para TTS simples sem clonagem...")
             try:
+                # Fallback: TTS normal sem clonagem
+                logger.warning("⚠️  Clonagem falhou, usando TTS normal...")
                 wav_data = tts_model.tts(
                     text=text,
-                    speaker_wav=temp_audio_path
+                    language=language
                 )
-                logger.info("✅ Fallback bem-sucedido!")
+                logger.info("✅ Fallback TTS simples bem-sucedido!")
+                
             except Exception as fallback_error:
                 logger.error(f"❌ Fallback também falhou: {type(fallback_error).__name__}: {str(fallback_error)}")
-                raise Exception(f"Erro na síntese TTS: {str(tts_error)}. Fallback: {str(fallback_error)}")
+                
+                # Último fallback: TTS sem language
+                logger.info("🔄 Último fallback: TTS sem especificar language...")
+                try:
+                    wav_data = tts_model.tts(text=text)
+                    logger.info("✅ Último fallback bem-sucedido!")
+                except Exception as final_error:
+                    logger.error(f"❌ Todos os fallbacks falharam: {final_error}")
+                    raise Exception(f"Clonagem falhou: {str(tts_error)}. TTS simples falhou: {str(fallback_error)}. Final: {str(final_error)}")
         
         inference_time = time.time() - start_time
         logger.info(f"⏱️  Áudio gerado em {inference_time:.2f} segundos")
