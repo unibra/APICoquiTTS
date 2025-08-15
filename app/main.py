@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Configurações de otimização para RTX 5090
 def setup_gpu_optimization():
-    """Configurar otimizações GPU (alinhado com PyTorch 2.4.1+cu121)"""
+    """Configurar otimizações GPU para CUDA 12.1 (PyTorch 2.4.1+cu121)"""
     if torch.cuda.is_available():
         try:
             # Obter informações da GPU
@@ -38,7 +38,7 @@ def setup_gpu_optimization():
             logger.info(f"GPU detectada: {gpu_info.name}")
             logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
             logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
-            logger.info(f"PyTorch: {torch.__version__} | CUDA Runtime: {torch.version.cuda}")
+            logger.info(f"PyTorch: {torch.__version__} | CUDA 12.1 Runtime: {torch.version.cuda}")
             logger.info(f"CUDA Runtime: {torch.cuda.get_device_capability(0)}")
             
             # Verificar se a arquitetura é suportada pelo PyTorch
@@ -98,7 +98,7 @@ gpu_available = setup_gpu_optimization()
 
 app = FastAPI(
     title="Coqui TTS API",
-    description="Serviço de Text-to-Speech usando Coqui TTS com aceleração CUDA (PyTorch 2.4.1+cu121)",
+    description="Serviço de Text-to-Speech usando Coqui TTS com CUDA 12.1 (PyTorch 2.4.1+cu121)",
     version="1.0.0"
 )
 
