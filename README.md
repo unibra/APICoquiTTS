@@ -5,17 +5,17 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose com 
 ## Funcionalidades
 
 - 🎤 Conversão de texto em áudio usando modelos Coqui TTS
-- 🚀 Aceleração GPU com CUDA 12.1
+- 🚀 Aceleração GPU com CUDA 12.0
 - 🚀 API REST com FastAPI
 - 🐳 Containerização com Docker
 - 📊 Documentação automática da API
 - 🔧 Configuração flexível de modelos e vozes
 - 📈 Health checks e monitoramento
-- ⚡ PyTorch 2.4.1 com CUDA 12.1
+- ⚡ PyTorch 2.4.1 com CUDA 12.0
 - 🔥 Suporte a Tensor Cores modernas
 
 **Otimizações GPU:**
-- **Base Python 3.11** - Com cuDNN 9.11.0 e CUDA 12.1
+- **Base Python 3.11** - Com cuDNN 9.11.0 e CUDA 12.0
 - **PyTorch 2.4.1+cu121** - Alinhado com outros serviços
 - **Tensor Cores** - Habilitado com `allow_tf32=True`
 - **Precisão mista** - `torch.set_float32_matmul_precision('high')`

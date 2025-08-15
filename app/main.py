@@ -38,7 +38,7 @@ def setup_gpu_optimization():
             logger.info(f"GPU detectada: {gpu_info.name}")
             logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
             logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
-            logger.info(f"PyTorch: {torch.__version__} | CUDA: {torch.version.cuda}")
+            logger.info(f"PyTorch: {torch.__version__} | CUDA Runtime: {torch.version.cuda}")
             logger.info(f"CUDA Runtime: {torch.cuda.get_device_capability(0)}")
             
             # Verificar se a arquitetura é suportada pelo PyTorch

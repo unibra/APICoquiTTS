@@ -1,10 +1,10 @@
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.0-devel-ubuntu22.04
 
-# Configurar variáveis de ambiente NVIDIA e CUDA 12.1
+# Configurar variáveis de ambiente NVIDIA e CUDA 12.0
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-ENV CUDA_HOME=/usr/local/cuda-12.1
-ENV CUDA_VERSION=12.1
+ENV CUDA_HOME=/usr/local/cuda-12.0
+ENV CUDA_VERSION=12.0
 ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 ENV NVIDIA_REQUIRE_CUDA="cuda>=12.1"
