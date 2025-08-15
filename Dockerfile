@@ -77,30 +77,6 @@ RUN pip install --no-cache-dir \
 # Instalar Coqui TTS - versão específica que funciona bem
 RUN pip install --no-cache-dir \
     TTS==0.22.0 \
-    --no-deps
-
-# Reinstalar dependências específicas do TTS
-RUN pip install --no-cache-dir \
-    coqui-ai-tts \
-    transformers>=4.33.0 \
-    tokenizers>=0.13.3 \
-    datasets>=2.14.0 \
-    fsspec>=2023.9.2 \
-    aiohttp \
-    gdown \
-    packaging \
-    psutil \
-    pyyaml \
-    requests \
-    tqdm \
-    unicodedata2 \
-    inflect \
-    anyascii \
-    pysbd \
-    gruut[de,es,fr] \
-    bangla \
-    bnnumerizer \
-    bnunicodenormalizer
 
 # Instalar bibliotecas de monitoramento GPU
 RUN pip install --no-cache-dir \
