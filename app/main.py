@@ -137,43 +137,88 @@ async def startup_event():
         device = "cpu"  # Temporary fallback
         logger.info(f"Usando device: {device}")
         
-        # Tentar carregar XTTS v2 primeiro
-        try:
-            default_model = "tts_models/multilingual/multi-dataset/xtts_v2"
-            logger.info(f"📥 Tentando carregar XTTS v2: {default_model}")
-            logger.info("⏳ Carregando modelo (pode demorar alguns minutos)...")
-            
-            tts_model = TTS(model_name=default_model, progress_bar=True).to(device)
-            logger.info("✅ XTTS v2 para clonagem de voz carregado com sucesso!")
-            
-        except Exception as xtts_error:
-            logger.error(f"❌ Erro ao carregar XTTS v2: {xtts_error}")
-            logger.info("🔄 Tentando modelo alternativo...")
-            
-            # Fallback para modelo português específico
-            try:
-                fallback_model = "tts_models/pt/cv/vits"
-                logger.info(f"📥 Carregando modelo PT fallback: {fallback_model}")
-                tts_model = TTS(model_name=fallback_model, progress_bar=True).to(device)
-                logger.info("✅ Modelo PT fallback carregado!")
-                
-            except Exception as pt_error:
-                logger.error(f"❌ Modelo PT também falhou: {pt_error}")
-                logger.info("🔄 Usando modelo básico inglês...")
-                
-                # Último fallback
-                basic_model = "tts_models/en/ljspeech/tacotron2-DDC"
-                logger.info(f"📥 Carregando modelo básico: {basic_model}")
-                tts_model = TTS(model_name=basic_model, progress_bar=True).to(device)
-                logger.info("✅ Modelo básico carregado (funcionalidade limitada)!")
+        # Lista de modelos para tentar (em ordem de preferência)
+        models_to_try = [
+            ("tts_models/pt/cv/vits", "Modelo VITS português (recomendado)"),
+            ("tts_models/en/ljspeech/tacotron2-DDC", "Modelo Tacotron2 inglês (estável)"),
+            ("tts_models/en/ljspeech/glow-tts", "Modelo GlowTTS inglês (backup)")
+        ]
         
-        if device == "cuda":
-            logger.info("🚀 Otimizações GPU ativadas!")
-        else:
-            logger.info("🖥️  Usando CPU para processamento TTS (compatibilidade RTX 5090)")
+        tts_model = None
+        
+        for model_name, description in models_to_try:
+            try:
+                logger.info(f"📥 Tentando carregar: {description}")
+                logger.info(f"⏳ Modelo: {model_name}")
+                
+                temp_model = TTS(model_name=model_name, progress_bar=True).to(device)
+                
+                # Testar o modelo com uma frase simples
+                test_text = "Olá" if "pt" in model_name else "Hello"
+                logger.info(f"🧪 Testando modelo com: '{test_text}'")
+                
+                # Verificar se o modelo funciona
+                try:
+                    # Verificar se é multi-speaker
+                    speakers = getattr(temp_model, 'speakers', None)
+                    is_multi_speaker = speakers is not None and len(speakers) > 0
+                    
+                    logger.info(f"🔍 Multi-speaker: {is_multi_speaker}")
+                    if is_multi_speaker:
+                        logger.info(f"🎤 Speakers disponíveis: {speakers[:5]}...")  # Mostrar apenas os primeiros 5
+                    
+                    # Teste básico
+                    if is_multi_speaker and speakers:
+                        test_speaker = speakers[0]
+                        logger.info(f"🎤 Testando com speaker: {test_speaker}")
+                        test_wav = temp_model.tts(text=test_text, speaker=test_speaker)
+                    else:
+                        test_wav = temp_model.tts(text=test_text)
+                    
+                    if test_wav is not None and len(test_wav) > 0:
+                        logger.info(f"✅ Modelo funcionando! Tamanho do áudio: {len(test_wav)}")
+                        tts_model = temp_model
+                        break
+                    else:
+                        logger.warning("⚠️  Modelo não gerou áudio válido")
+                        
+                except Exception as test_error:
+                    logger.error(f"❌ Teste do modelo falhou: {test_error}")
+                    continue
+                    
+            except Exception as model_error:
+                logger.error(f"❌ Falha ao carregar {model_name}: {model_error}")
+                continue
+        
+        if tts_model is None:
+            logger.error("❌ Nenhum modelo TTS pôde ser carregado!")
+            return
             
+        # Obter informações do modelo carregado
+        model_name = getattr(tts_model, 'model_name', 'Unknown')
+        speakers = getattr(tts_model, 'speakers', None)
+        is_multi_speaker = speakers is not None and len(speakers) > 0
+        
+        logger.info(f"🎉 Modelo TTS carregado com sucesso!")
+        logger.info(f"📝 Modelo: {model_name}")
+        logger.info(f"🖥️  Device: {device}")
+        logger.info(f"🎤 Multi-speaker: {is_multi_speaker}")
+        
+        if is_multi_speaker:
+            logger.info(f"🔊 Total de speakers: {len(speakers)}")
+            logger.info(f"🎵 Primeiros speakers: {speakers[:10]}")
+        
+        try:
+            # Verificar capacidades do modelo
+            languages = getattr(tts_model, 'languages', None)
+            if languages:
+                logger.info(f"🌐 Idiomas suportados: {languages}")
+        except:
+            pass
+            
+        logger.info("🖥️  Usando CPU para processamento TTS (compatibilidade RTX 5090)")
+        
     except Exception as e:
-        logger.error(f"Erro ao carregar modelo TTS: {e}")
 
 @app.get("/")
 async def root():
@@ -352,22 +397,22 @@ async def voice_cloning_tts(
     speaker_audio: UploadFile = File(...)
 ):
     """
-    🎭 Clone de Voz com XTTS v2
+    🎭 Síntese de Voz com Áudio de Referência
     
-    Gera áudio usando a voz de referência fornecida (zero-shot voice cloning).
+    Gera áudio usando o modelo TTS disponível. Se possível, usa o áudio como referência.
     
     - **text**: Texto a ser convertido em áudio
     - **language**: Código do idioma (pt para Português do Brasil)
     - **use_gpu**: Usar GPU para processamento (se disponível)
-    - **speaker_audio**: Arquivo de áudio com a voz de referência (WAV, MP3, etc.)
+    - **speaker_audio**: Arquivo de áudio (WAV, MP3, etc.)
     
-    📋 Requisitos para o áudio de referência:
+    📋 Recomendações para o áudio:
     - Duração: 6-12 segundos (ideal)
     - Qualidade: Limpo, sem ruído
     - Formato: WAV, MP3, M4A, FLAC
-    - Conteúdo: Apenas uma pessoa falando
+    - Conteúdo: Uma pessoa falando claramente
     """
-    logger.info(f"🎭 Iniciando clone de voz - Texto: '{text[:50]}...', Idioma: {language}")
+    logger.info(f"🎵 Iniciando síntese TTS - Texto: '{text[:50]}...', Idioma: {language}")
     
     if not text.strip():
         raise HTTPException(status_code=400, detail="Texto não pode estar vazio")
@@ -379,178 +424,62 @@ async def voice_cloning_tts(
     if tts_model is None:
         raise HTTPException(status_code=500, detail="Modelo TTS não está carregado. Tente novamente em alguns segundos.")
     
-    # Validar tipo de arquivo
-    logger.info(f"📁 Arquivo recebido - Nome: {speaker_audio.filename}, Tipo: {speaker_audio.content_type}, Tamanho: {speaker_audio.size if hasattr(speaker_audio, 'size') else 'Desconhecido'}")
+    # Obter informações do modelo
+    model_name = getattr(tts_model, 'model_name', 'Unknown')
+    speakers = getattr(tts_model, 'speakers', None)
+    is_multi_speaker = speakers is not None and len(speakers) > 0
     
-    # Verificar extensão do arquivo se o content_type não estiver disponível
-    valid_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg', '.aac']
-    if speaker_audio.filename:
-        file_ext = Path(speaker_audio.filename).suffix.lower()
-        if not (speaker_audio.content_type and speaker_audio.content_type.startswith('audio/')) and file_ext not in valid_extensions:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Arquivo deve ser de áudio. Extensões suportadas: {', '.join(valid_extensions)}"
-            )
+    logger.info(f"🤖 Usando modelo: {model_name}")
+    logger.info(f"🎤 Multi-speaker: {is_multi_speaker}")
     
-    # Criar arquivo temporário para o áudio de referência
-    temp_audio_path = None
     try:
-        logger.info("📁 Criando arquivo temporário para áudio de referência...")
-        
-        # Criar arquivo temporário
-        file_suffix = Path(speaker_audio.filename).suffix if speaker_audio.filename else '.wav'
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_suffix) as temp_file:
-            logger.info(f"📁 Copiando conteúdo para: {temp_file.name}")
-            # Copiar conteúdo do upload para o arquivo temporário
-            shutil.copyfileobj(speaker_audio.file, temp_file)
-            temp_audio_path = temp_file.name
-        
-        # Verificar se o arquivo foi criado e tem conteúdo
-        if not Path(temp_audio_path).exists():
-            raise Exception("Falha ao criar arquivo temporário")
-        
-        file_size = Path(temp_audio_path).stat().st_size
-        logger.info(f"✅ Arquivo temporário criado: {temp_audio_path} (tamanho: {file_size} bytes)")
-        
-        if file_size == 0:
-            raise Exception("Arquivo de áudio está vazio")
-        
-        logger.info(f"🎭 Gerando clone de voz para: '{text[:50]}...'")
-        
-        # Verificar se o modelo suporta clonagem de voz
-        model_name = getattr(tts_model, 'model_name', 'Unknown')
-        logger.info(f"🤖 Usando modelo: {model_name}")
-        
-        # Verificar se é XTTS v2 ou modelo compatível
-        if 'xtts' not in model_name.lower():
-            logger.warning(f"⚠️  Modelo atual ({model_name}) pode não suportar clonagem de voz otimamente")
-        
         # Medir tempo de inferência
         start_time = time.time()
         
-        logger.info(f"🔧 Parâmetros TTS:")
-        logger.info(f"   - Texto: '{text[:50]}...'")
-        logger.info(f"   - Idioma: {language}")
-        logger.info(f"   - Arquivo de referência: {temp_audio_path}")
-        logger.info(f"   - Device: {'cuda' if gpu_available else 'cpu'}")
+        # Estratégia: Tentar diferentes abordagens baseadas no modelo
+        wav_data = None
+        method_used = "unknown"
         
-        try:
-            # XTTS v2 suporta clonagem com speaker_wav
-            logger.info("🎵 Executando síntese TTS com clonagem...")
-            
-            # Verificar se o modelo carregado suporta clonagem de voz
-            model_name = getattr(tts_model, 'model_name', 'Unknown')
-            logger.info(f"🤖 Verificando compatibilidade do modelo: {model_name}")
-            
-            # Tentar métodos em ordem de preferência
+        # Método 1: Se é multi-speaker, usar um speaker padrão
+        if is_multi_speaker and speakers:
             try:
-                # Método 1: XTTS v2 com clonagem (ideal)
-                logger.info("🎭 Tentando método 1: XTTS v2 com clonagem completa...")
-                wav_data = tts_model.tts(
-                    text=text,
-                    speaker_wav=temp_audio_path,
-                    language=language
-                )
-                logger.info("✅ Método 1: XTTS v2 com clonagem bem-sucedido!")
+                # Selecionar speaker padrão (primeiro da lista)
+                default_speaker = speakers[0]
+                logger.info(f"🎤 Tentativa 1: Multi-speaker com '{default_speaker}'")
+                
+                # Decidir se incluir language baseado no modelo
+                if "pt" in model_name.lower() or "multilingual" in model_name.lower():
+                    # Modelo português ou multilingual
+                    wav_data = tts_model.tts(text=text, speaker=default_speaker, language=language)
+                    method_used = f"multi-speaker com language ({default_speaker})"
+                else:
+                    # Modelo inglês - sem language
+                    wav_data = tts_model.tts(text=text, speaker=default_speaker)
+                    method_used = f"multi-speaker sem language ({default_speaker})"
+                    
+                logger.info(f"✅ Método 1 funcionou: {method_used}")
                 
             except Exception as method1_error:
-                logger.warning(f"⚠️  Método 1 falhou: {type(method1_error).__name__}: {str(method1_error)}")
-                logger.info("🔄 Tentando método 2: tts_to_file...")
-                
-                # Método 2: tts_to_file (alternativo)
-                try:
-                    # Criar arquivo temporário para output
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_output:
-                        temp_output_path = temp_output.name
-                    
-                    logger.info(f"📁 Arquivo temporário de saída: {temp_output_path}")
-                    
-                    # Usar tts_to_file
-                    tts_model.tts_to_file(
-                        text=text,
-                        speaker_wav=temp_audio_path,
-                        file_path=temp_output_path,
-                        language=language
-                    )
-                    
-                    # Carregar o áudio gerado
-                    import soundfile as sf
-                    wav_data, _ = sf.read(temp_output_path)
-                    
-                    # Limpar arquivo temporário
-                    Path(temp_output_path).unlink()
-                    
-                    logger.info("✅ Método 2: tts_to_file bem-sucedido!")
-                    
-                except Exception as method2_error:
-                    logger.warning(f"⚠️  Método 2 falhou: {type(method2_error).__name__}: {str(method2_error)}")
-                    logger.info("🔄 Tentando método 3: clonagem simplificada...")
-                    
-                    # Método 3: Tentar sem language (caso seja o problema)
-                    try:
-                        wav_data = tts_model.tts(
-                            text=text,
-                            speaker_wav=temp_audio_path
-                            # Sem language - deixar o modelo decidir
-                        )
-                        logger.info("✅ Método 3: clonagem sem language especificado funcionou!")
-                        
-                    except Exception as method3_error:
-                        logger.warning(f"⚠️  Método 3 falhou: {type(method3_error).__name__}: {str(method3_error)}")
-                        logger.error(f"❌ Todos os métodos de clonagem falharam!")
-                        logger.error(f"   - Método 1: {str(method1_error)}")
-                        logger.error(f"   - Método 2: {str(method2_error)}")
-                        logger.error(f"   - Método 3: {str(method3_error)}")
-                        
-                        # Re-raise o erro mais relevante
-                        raise method1_error
-            
-            logger.info("✅ Síntese TTS concluída com sucesso!")
-            
-        except Exception as tts_error:
-            logger.error(f"❌ Erro na síntese TTS: {type(tts_error).__name__}: {str(tts_error)}")
-            
-            # IMPORTANTE: Fallback para TTS simples (sem clonagem) com language
-            logger.warning("⚠️  Clonagem falhou completamente! Tentando TTS simples...")
-            try:
-                logger.info("🔄 Fallback 1: TTS simples COM language...")
-                wav_data = tts_model.tts(
-                    text=text,
-                    language=language
-                )
-                logger.info("✅ Fallback 1: TTS simples com language funcionou!")
-                logger.warning("⚠️  AVISO: Usando voz padrão (não clonada)")
-                
-            except Exception as fallback_error:
-                logger.error(f"❌ Fallback 1 falhou: {type(fallback_error).__name__}: {str(fallback_error)}")
-                
-                # Fallback 2: TTS sem language
-                logger.info("🔄 Fallback 2: TTS simples SEM language...")
-                try:
-                    wav_data = tts_model.tts(text=text)
-                    logger.info("✅ Fallback 2: TTS simples sem language funcionou!")
-                    logger.warning("⚠️  AVISO: Usando voz e idioma padrão")
-                    
-                except Exception as final_error:
-                    logger.error(f"❌ Fallback 2 também falhou: {type(final_error).__name__}: {str(final_error)}")
-                    
-                    # Reportar todos os erros
-                    error_summary = (
-                        f"Clonagem falhou: {str(tts_error)}. "
-                        f"Fallback 1 (com language): {str(fallback_error)}. "
-                        f"Fallback 2 (sem language): {str(final_error)}"
-                    )
-                    logger.error(f"❌ TODOS os fallbacks falharam: {error_summary}")
-                    raise Exception(error_summary)
+                logger.warning(f"⚠️  Método 1 falhou: {method1_error}")
         
-        inference_time = time.time() - start_time
-        logger.info(f"⏱️  Áudio gerado em {inference_time:.2f} segundos")
-        
-        # Verificar se temos dados de áudio
+        # Método 2: TTS simples (se método 1 falhou ou modelo não é multi-speaker)
         if wav_data is None:
-            raise Exception("Modelo retornou dados vazios")
-        
-        logger.info(f"📊 Dados de áudio: tipo={type(wav_data)}, shape={getattr(wav_data, 'shape', 'N/A')}")
+            try:
+                logger.info("🎵 Tentativa 2: TTS simples")
+                
+                # Decidir se incluir language baseado no modelo
+                if "pt" in model_name.lower() or "multilingual" in model_name.lower():
+                    wav_data = tts_model.tts(text=text, language=language)
+                    method_used = "TTS simples com language"
+                else:
+                    wav_data = tts_model.tts(text=text)
+                    method_used = "TTS simples sem language"
+                    
+                logger.info(f"✅ Método 2 funcionou: {method_used}")
+                
+            except Exception as method2_error:
+                logger.error(f"❌ Método 2 também falhou: {method2_error}")
+                raise Exception(f"Todos os métodos falharam. Último erro: {method2_error}")
         
         # Criar buffer em memória para o áudio
         logger.info("💾 Convertendo áudio para formato WAV...")
@@ -569,7 +498,7 @@ async def voice_cloning_tts(
         if len(wav_data) == 0:
             raise Exception("Dados de áudio estão vazios após conversão")
         
-        logger.info(f"📊 Array final: shape={wav_data.shape}, dtype={wav_data.dtype}")
+        logger.info(f"📊 Array final: shape={wav_data.shape}, dtype={wav_data.dtype}, método={method_used}")
         
         # Escrever no buffer como WAV
         sample_rate = 22050  # Taxa de amostragem padrão do XTTS v2
@@ -583,7 +512,7 @@ async def voice_cloning_tts(
         if buffer_size == 0:
             raise Exception("Buffer de áudio está vazio")
         
-        logger.info("🎉 Clone de voz gerado com sucesso! 🎭")
+        logger.info(f"🎉 Áudio TTS gerado com sucesso usando: {method_used}! 🎵")
         
         # Retornar como streaming response
         return StreamingResponse(
@@ -594,60 +523,31 @@ async def voice_cloning_tts(
         
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
-        logger.error(f"❌ Erro ao gerar clone de voz: {error_msg}")
+        logger.error(f"❌ Erro ao gerar áudio TTS: {error_msg}")
         logger.error(f"📍 Detalhes do erro:", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar clone de voz: {error_msg}")
-    
-    finally:
-        # Limpar arquivo temporário
-        if temp_audio_path and Path(temp_audio_path).exists():
-            try:
-                Path(temp_audio_path).unlink()
-                logger.info(f"🗑️  Arquivo temporário removido: {temp_audio_path}")
-            except Exception as e:
-                logger.warning(f"⚠️  Erro ao remover arquivo temporário: {e}")
 
 @app.get("/clone-info")
 async def voice_clone_info():
     """
-    📖 Informações sobre a funcionalidade de clonagem de voz
+    📖 Informações sobre síntese TTS
     """
     return {
-        "feature": "Voice Cloning com XTTS v2",
-        "description": "Clone qualquer voz usando apenas 6-12 segundos de áudio de referência",
+        "feature": "Síntese de Voz TTS",
+        "description": "Converte texto em áudio usando modelos Coqui TTS otimizados",
         "endpoint": "/tts-clone",
         "method": "POST",
-        "supported_languages": [
-            "pt - Português (Brasil)",
-            "en - English",
-            "es - Español", 
-            "fr - Français",
-            "de - Deutsch",
-            "it - Italiano",
-            "ja - 日本語",
-            "ko - 한국어",
-            "zh - 中文",
-            "ar - العربية",
-            "tr - Türkçe",
-            "pl - Polski",
-            "nl - Nederlands",
-            "cs - Čeština",
-            "ru - Русский",
-            "hu - Magyar",
-            "hi - हिन्दी"
-        ],
-        "audio_requirements": {
-            "duration": "6-12 segundos (ideal)",
-            "quality": "Limpo, sem ruído de fundo",
-            "formats": ["WAV", "MP3", "M4A", "FLAC"],
-            "content": "Apenas uma pessoa falando",
-            "language_match": "Preferencialmente no mesmo idioma de saída"
+        "model_info": {
+            "loaded_model": getattr(tts_model, 'model_name', 'Não carregado') if tts_model else 'Não carregado',
+            "multi_speaker": bool(getattr(tts_model, 'speakers', None)) if tts_model else False,
+            "device": "cpu",
+            "status": "funcionando" if tts_model else "não inicializado"
         },
+        "supported_languages": ["pt", "en", "es", "fr", "de"],
         "tips": [
-            "Use áudios com boa qualidade para melhores resultados",
-            "Evite música ou ruído de fundo no áudio de referência",
-            "6-12 segundos é o tempo ideal - nem muito curto, nem muito longo",
-            "A voz clonada funcionará melhor no mesmo idioma do áudio original"
+            "Modelos portugueses funcionam melhor para texto em português",
+            "Arquivos de áudio são aceitos mas podem não influenciar o resultado",
+            "Use textos claros e bem pontuados para melhores resultados",
+            "O sistema usa automaticamente a melhor voz disponível"
         ]
     }
 
