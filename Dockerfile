@@ -1,9 +1,18 @@
 FROM python:3.11-slim
 
+# Instalar CUDA 12.4 toolkit e drivers para RTX 5090
+RUN apt-get update && apt-get install -y \
+    gnupg2 \
+    software-properties-common && \
+    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+    add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
+    apt-get update
+
 # Instalar dependências básicas do sistema
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
+    git \
     build-essential \
     pkg-config \
     libssl-dev \
@@ -14,11 +23,17 @@ RUN apt-get update && apt-get install -y \
     libespeak-dev \
     libsndfile1 \
     ffmpeg \
+    nvidia-cuda-toolkit \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar variáveis de ambiente NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV CUDA_HOME=/usr/local/cuda-12.4
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+ENV NVIDIA_REQUIRE_CUDA="cuda>=12.4"
+ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0 12.0"
 
 # Definir diretório de trabalho
 WORKDIR /app
@@ -32,11 +47,10 @@ COPY app/requirements.txt .
 # Instalar dependências Python do requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar PyTorch com CUDA (se disponível)
+# Instalar PyTorch nightly com suporte RTX 5090 (sm_120)
 RUN pip install --no-cache-dir \
-    torch==2.5.1+cu124 \
-    torchaudio==2.5.1+cu124 \
-    --index-url https://download.pytorch.org/whl/cu124
+    --pre torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/nightly/cu124
 
 # Instalar bibliotecas de áudio primeiro
 RUN pip install --no-cache-dir \
@@ -45,13 +59,16 @@ RUN pip install --no-cache-dir \
     numpy==1.24.4 \
     scipy==1.11.0
 
-# Instalar Coqui TTS
-RUN pip install --no-cache-dir TTS==0.22.0
+# Instalar Coqui TTS versão mais recente com melhor suporte CUDA
+RUN pip install --no-cache-dir \
+    git+https://github.com/coqui-ai/TTS.git@dev \
+    --upgrade --force-reinstall
 
 # Instalar bibliotecas de monitoramento GPU
 RUN pip install --no-cache-dir \
     nvidia-ml-py3==7.352.0 \
-    gputil==1.4.0
+    gputil==1.4.0 \
+    pynvml==11.5.0
 
 # Copiar código da aplicação
 COPY app/ .
