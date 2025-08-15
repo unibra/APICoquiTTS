@@ -97,7 +97,7 @@ class TTSRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
     
     text: str
-    model_name: Optional[str] = "tts_models/pt/cv/vits"
+    model_name: Optional[str] = "tts_models/multilingual/multi-dataset/xtts_v2"
     speaker: Optional[str] = None
     language: Optional[str] = "pt"
     use_gpu: Optional[bool] = True
@@ -116,8 +116,8 @@ async def startup_event():
         return
     
     try:
-        # Inicializar com modelo padrão
-        default_model = "tts_models/pt/cv/vits"
+        # Inicializar com modelo XTTS v2 para Português do Brasil
+        default_model = "tts_models/multilingual/multi-dataset/xtts_v2"
         logger.info(f"Carregando modelo TTS: {default_model}")
         
         # Configurar device (GPU se disponível)
@@ -125,7 +125,7 @@ async def startup_event():
         logger.info(f"Usando device: {device}")
         
         tts_model = TTS(model_name=default_model).to(device)
-        logger.info("Modelo TTS carregado com sucesso!")
+        logger.info("Modelo XTTS v2 para Português do Brasil carregado com sucesso!")
         
         if gpu_available:
             logger.info("Otimizações GPU ativadas!")
@@ -185,12 +185,13 @@ async def list_models():
         return {"available_models": models or []}
     except Exception as e:
         logger.error(f"Erro ao listar modelos: {e}", exc_info=True)
-        # Fallback com modelos conhecidos
+        # Fallback com modelos conhecidos - priorizando XTTS v2 e português brasileiro
         fallback_models = [
+            "tts_models/multilingual/multi-dataset/xtts_v2",
             "tts_models/pt/cv/vits",
-            "tts_models/pt/cv/tacotron2-DDC",
             "tts_models/en/ljspeech/tacotron2-DDC",
             "tts_models/en/ljspeech/glow-tts",
+            "tts_models/pt/cv/tacotron2-DDC",
             "tts_models/fr/mai/tacotron2-DDC",
             "tts_models/es/mai/tacotron2-DDC",
             "tts_models/de/mai/tacotron2-DDC"
@@ -221,7 +222,7 @@ async def text_to_speech(request: TTSRequest):
     try:
         # Usar modelo global ou carregar um novo se especificado
         current_tts = tts_model
-        if request.model_name and request.model_name != "tts_models/pt/cv/vits":
+        if request.model_name and request.model_name != "tts_models/multilingual/multi-dataset/xtts_v2":
             logger.info(f"Carregando modelo específico: {request.model_name}")
             device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
             current_tts = TTS(model_name=request.model_name).to(device)
@@ -253,6 +254,7 @@ async def text_to_speech(request: TTSRequest):
             # Adicionar language se especificado
             if request.language:
                 tts_kwargs["language"] = request.language
+                logger.info(f"Usando idioma: {request.language} (Português do Brasil para 'pt')")
             
             logger.info(f"Parâmetros TTS: {tts_kwargs}")
             wav_data = current_tts.tts(**tts_kwargs)
