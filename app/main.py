@@ -28,26 +28,32 @@ logger = logging.getLogger(__name__)
 
 # Configurações de otimização para RTX 5090
 def setup_gpu_optimization():
-    """Configurar otimizações GPU para CUDA 12.1 (PyTorch 2.4.1+cu121)"""
+    """
+    Configurar otimizações GPU para CUDA 12.1 (PyTorch 2.4.1+cu121)
+    Retorna True se GPU estiver funcionando, False para fallback CPU
+    """
     if torch.cuda.is_available():
         try:
+            # Verificar se CUDA está realmente funcional
+            logger.info("🔍 Verificando disponibilidade CUDA...")
+            
             # Obter informações da GPU
             gpu_info = torch.cuda.get_device_properties(0)
             compute_capability = f"sm_{gpu_info.major}{gpu_info.minor}"
             
-            logger.info(f"GPU detectada: {gpu_info.name}")
-            logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
-            logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
+            logger.info(f"🎯 GPU detectada: {gpu_info.name}")
+            logger.info(f"💾 Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
+            logger.info(f"⚡ Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
             logger.info(f"PyTorch: {torch.__version__} | CUDA 12.1 Runtime: {torch.version.cuda}")
-            logger.info(f"CUDA Runtime: {torch.cuda.get_device_capability(0)}")
+            logger.info(f"🔧 CUDA Runtime: {torch.cuda.get_device_capability(0)}")
             
             # Verificar se a arquitetura é suportada pelo PyTorch
             supported_archs = torch.cuda.get_arch_list()
-            logger.info(f"Arquiteturas CUDA suportadas pelo PyTorch: {supported_archs}")
+            logger.info(f"🏗️  Arquiteturas CUDA suportadas: {supported_archs}")
             
             # RTX 5090 específica (sm_120) - verificação especial
             if gpu_info.major >= 9:  # RTX 4090/5090 e superiores
-                logger.info(f"🚀 GPU {gpu_info.name} detectada! Aplicando otimizações...")
+                logger.info(f"🚀 GPU moderna {gpu_info.name} detectada! Aplicando otimizações...")
                 
                 # Configurações para GPUs modernas (RTX 4090/5090)
                 torch.backends.cuda.matmul.allow_tf32 = True
@@ -57,12 +63,13 @@ def setup_gpu_optimization():
                 # Tensor Cores para GPUs modernas
                 torch.set_float32_matmul_precision('high')
                 logger.info("⚡ Tensor Cores habilitados")
-                logger.info("🧠 Otimizações de memória GPU aplicadas")
+                logger.info("🧠 Otimizações avançadas aplicadas")
             else:
-                logger.info("🖥️  Aplicando configurações básicas GPU")
+                logger.info("🖥️  Aplicando configurações padrão GPU")
             
             # Testar uma operação simples na GPU para verificar compatibilidade real
             try:
+                logger.info("🧪 Testando operação CUDA...")
                 test_tensor = torch.tensor([1.0]).cuda()
                 result = test_tensor * 2
                 result.cpu()  # Mover de volta para CPU
@@ -71,10 +78,10 @@ def setup_gpu_optimization():
                 logger.info("✅ Teste CUDA bem-sucedido!")
             except Exception as cuda_test_error:
                 logger.error(f"❌ Teste CUDA falhou: {cuda_test_error}")
-                logger.warning("🔄 Fazendo fallback para CPU")
+                logger.warning("🔄 CUDA não funcional, fazendo fallback para CPU")
                 return False
             
-            # Configurar otimizações GPU se tudo estiver OK
+            # Configurar otimizações finais se tudo estiver OK
             torch.backends.cudnn.benchmark = True
             torch.backends.cudnn.deterministic = False  # Máxima performance
             torch.cuda.empty_cache()
@@ -82,19 +89,34 @@ def setup_gpu_optimization():
             # Log de status final
             memory_reserved = torch.cuda.memory_reserved(0) / 1024**3
             memory_allocated = torch.cuda.memory_allocated(0) / 1024**3
-            logger.info(f"🎯 Memória GPU - Reservada: {memory_reserved:.1f}GB, Alocada: {memory_allocated:.1f}GB")
+            logger.info(f"📊 Memória GPU - Reservada: {memory_reserved:.1f}GB, Alocada: {memory_allocated:.1f}GB")
             
-            logger.info("🚀 Otimizações GPU ativadas com sucesso!")
+            logger.info("🚀 GPU configurada e funcionando!")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Erro ao configurar GPU: {e}")
-            logger.warning("🔄 Fazendo fallback para CPU")
+            logger.error(f"❌ Erro ao configurar GPU: {e}", exc_info=True)
+            logger.warning("🔄 GPU indisponível, fazendo fallback para CPU")
             return False
+    else:
+        logger.info("🖥️  CUDA não disponível no sistema")
+        logger.info("🔄 Usando processamento CPU")
     return False
 
 # Configurar GPU na inicialização
 gpu_available = setup_gpu_optimization()
+device_type = "cuda" if gpu_available else "cpu"
+
+logger.info("=" * 60)
+logger.info("🎯 CONFIGURAÇÃO FINAL DO SISTEMA")
+logger.info("=" * 60)
+logger.info(f"🖥️  Device: {device_type.upper()}")
+logger.info(f"🎵 TTS: Coqui TTS com PyTorch {torch.__version__}")
+if gpu_available:
+    logger.info("🚀 Modo: GPU Acelerada (CUDA 12.1)")
+else:
+    logger.info("🔄 Modo: CPU Fallback")
+logger.info("=" * 60)
 
 app = FastAPI(
     title="Coqui TTS API",
@@ -138,9 +160,8 @@ async def startup_event():
     try:
         logger.info("🚀 Inicializando modelo TTS...")
         
-        # Configurar device (GPU se disponível)
-        device = "cuda" if gpu_available else "cpu"
-        logger.info(f"Usando device: {device}")
+        # Usar device configurado globalmente
+        logger.info(f"🎯 Carregando modelo no device: {device_type}")
         
         # Lista de modelos para tentar (em ordem de preferência)
         models_to_try = [
@@ -156,17 +177,16 @@ async def startup_event():
                 logger.info(f"📥 Tentando carregar: {description}")
                 logger.info(f"⏳ Modelo: {model_name}")
                 
-                temp_model = TTS(model_name=model_name, progress_bar=True).to(device)
+                # Configurar modelo com device apropriado
+                if gpu_available:
+                    temp_model = TTS(model_name=model_name, progress_bar=True, gpu=True).to(device_type)
+                    logger.info("🚀 Carregando modelo na GPU...")
+                else:
+                    temp_model = TTS(model_name=model_name, progress_bar=True, gpu=False)
+                    logger.info("🖥️  Carregando modelo na CPU...")
                 
                 # Testar o modelo com uma frase simples
                 test_text = "Olá" if "pt" in model_name else "Hello"
-            # Configurar device com aceleração GPU
-            if device == "cuda" and gpu_available:
-                temp_model = TTS(model_name=model_name, progress_bar=True, gpu=True).to(device)
-                logger.info("🚀 Modelo carregado na GPU com aceleração CUDA")
-            else:
-                temp_model = TTS(model_name=model_name, progress_bar=True, gpu=False).to(device)
-                logger.info("🖥️  Modelo carregado na CPU")
                 
                 # Verificar se o modelo funciona
                 try:
@@ -212,22 +232,28 @@ async def startup_event():
         
         logger.info(f"🎉 Modelo TTS carregado com sucesso!")
         logger.info(f"📝 Modelo: {model_name}")
-        logger.info(f"🖥️  Device: {device}")
+        logger.info(f"🖥️  Device: {device_type}")
         logger.info(f"🎤 Multi-speaker: {is_multi_speaker}")
         
-        # Log específico para RTX 5090
-        if device == "cuda" and gpu_available:
+        # Log específico para GPU
+        if gpu_available:
             try:
                 memory_used = torch.cuda.memory_allocated(0) / 1024**3
-        # Log específico para GPU
+                memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
                 logger.info(f"🎯 GPU RTX 5090 - Memória usada: {memory_used:.1f}GB/{memory_total:.1f}GB")
             except:
-                pass
-        
-                logger.info(f"🎯 GPU - Memória usada: {memory_used:.1f}GB/{memory_total:.1f}GB")
+                logger.info("🎯 GPU ativa (informações de memória indisponíveis)")
+        else:
+            # Informações do sistema para CPU
+            cpu_count = psutil.cpu_count()
+            memory_info = psutil.virtual_memory()
+            logger.info(f"🖥️  CPU: {cpu_count} cores disponíveis")
+            logger.info(f"💾 RAM: {memory_info.available / 1024**3:.1f}GB/{memory_info.total / 1024**3:.1f}GB disponível")
+            
+        if speakers and len(speakers) > 0:
             logger.info(f"🔊 Total de speakers: {len(speakers)}")
             logger.info(f"🎵 Speakers disponíveis: {speakers[:10]}")
-        
+            
         try:
             # Verificar capacidades do modelo
             languages = getattr(tts_model, 'languages', None)
@@ -236,10 +262,10 @@ async def startup_event():
         except:
             pass
             
-        if device == "cuda":
+        if gpu_available:
             logger.info("🚀 Usando GPU para processamento TTS acelerado!")
         else:
-            logger.info("🖥️  Usando CPU para processamento TTS")
+            logger.info("🖥️  Usando CPU para processamento TTS (modo compatibilidade)")
         
     except Exception as e:
 
@@ -275,7 +301,8 @@ async def health_check():
         "status": "healthy",
         "tts_available": tts_model is not None,
         "gpu_available": gpu_available,
-        "device": "cuda" if gpu_available else "cpu",
+        "device": device_type,
+        "mode": "GPU Accelerated" if gpu_available else "CPU Fallback",
         "gpu_info": gpu_info
     }
 
@@ -333,15 +360,21 @@ async def text_to_speech(request: TTSRequest):
         current_tts = tts_model
         if request.model_name and request.model_name != "tts_models/multilingual/multi-dataset/xtts_v2":
             logger.info(f"Carregando modelo específico: {request.model_name}")
-            device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
-            current_tts = TTS(model_name=request.model_name).to(device)
+            use_gpu = gpu_available and request.use_gpu
+            if use_gpu:
+                current_tts = TTS(model_name=request.model_name, gpu=True).to(device_type)
+                logger.info("🚀 Modelo específico carregado na GPU")
+            else:
+                current_tts = TTS(model_name=request.model_name, gpu=False)
+                logger.info("🖥️  Modelo específico carregado na CPU")
         
         if current_tts is None:
             raise HTTPException(status_code=500, detail="Modelo TTS não está carregado")
         
         # Gerar áudio
-        device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
-        logger.info(f"Gerando áudio para texto: {request.text[:50]}... (device: {device})")
+        use_gpu = gpu_available and request.use_gpu
+        actual_device = device_type if use_gpu else "cpu"
+        logger.info(f"Gerando áudio para texto: {request.text[:50]}... (device: {actual_device})")
         
         # Medir tempo de inferência
         start_time = time.time()
@@ -363,7 +396,7 @@ async def text_to_speech(request: TTSRequest):
             # Adicionar language se especificado
             if request.language:
                 tts_kwargs["language"] = request.language
-                logger.info(f"Usando idioma: {request.language} (Português do Brasil para 'pt')")
+                logger.info(f"Usando idioma: {request.language}")
             
             logger.info(f"Parâmetros TTS: {tts_kwargs}")
             wav_data = current_tts.tts(**tts_kwargs)

@@ -5,18 +5,22 @@ services:
       dockerfile: Dockerfile
     container_name: tts-api
     restart: unless-stopped
-    runtime: nvidia
+    # Runtime nvidia será usado se disponível, senão fallback para runc
+    runtime: nvidia  # Remova esta linha se não tiver GPU
     environment:
       - PYTHONUNBUFFERED=1
       - COQUI_TOS_AGREED=1
       - DEBUG=False
       - LOG_LEVEL=INFO
+      - FORCE_CPU=false
+      - TTS_DEVICE=auto
       - TTS_CACHE_PATH=/app/models
       - HF_HOME=/app/models
       - TRANSFORMERS_CACHE=/app/models
       - HUGGINGFACE_HUB_CACHE=/app/models
       - HF_HUB_CACHE=/app/models
       - TOKENIZERS_PARALLELISM=false
+      # Variáveis GPU (serão ignoradas se GPU não disponível)
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - CUDA_VISIBLE_DEVICES=0
@@ -38,7 +42,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 180s  # Mais tempo para fallback CPU
     networks:
       - tts-net
 

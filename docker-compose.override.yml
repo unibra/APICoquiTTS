@@ -6,4 +6,5 @@ services:
     environment:
       - DEBUG=True
       - LOG_LEVEL=DEBUG
+      - FORCE_CPU=false  # Mude para true para forçar CPU em desenvolvimento
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8888", "--reload"]

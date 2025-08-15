@@ -1,6 +1,6 @@
 FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
-# Configurar variáveis de ambiente NVIDIA e CUDA 12.1
+# Configurar variáveis de ambiente NVIDIA e CUDA 12.1 (com fallback CPU)
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 ENV CUDA_HOME=/usr/local/cuda-12.1
@@ -9,6 +9,10 @@ ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 ENV NVIDIA_REQUIRE_CUDA="cuda>=12.1"
 ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0+PTX"
+
+# Variáveis para fallback CPU
+ENV FORCE_CPU=false
+ENV TTS_DEVICE=auto
 
 # Instalar Python 3.11 e dependências do sistema
 RUN apt-get update && apt-get install -y \

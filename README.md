@@ -6,14 +6,14 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose com 
 
 - 🎤 Conversão de texto em áudio usando modelos Coqui TTS
 - 🚀 Aceleração GPU com CUDA 12.0
-- 🚀 Aceleração GPU com CUDA 12.1
+- 🚀 Aceleração GPU com CUDA 12.1 + **Fallback automático para CPU**
 - 🚀 API REST com FastAPI
 - 🐳 Containerização com Docker
 - 📊 Documentação automática da API
 - 🔧 Configuração flexível de modelos e vozes
 - 📈 Health checks e monitoramento
 - ⚡ PyTorch 2.4.1 com CUDA 12.1
-- 🔥 Suporte a Tensor Cores modernas
+- 🔥 Suporte a Tensor Cores modernas + **Compatibilidade CPU**
 
 **Otimizações GPU:**
 - **Base Python 3.11** - Com cuDNN 9.11.0 e CUDA 12.1
@@ -22,6 +22,7 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose com 
 - **Precisão mista** - `torch.set_float32_matmul_precision('high')`
 - **Benchmark automático** - `torch.backends.cudnn.benchmark = True`
 - **Gerenciamento de memória** - Cache otimizado e limpeza automática
+- **🔄 Fallback CPU** - Funciona mesmo sem GPU disponível
 
 **Recursos GPU:**
 - Monitoramento em tempo real (uso, temperatura, memória)
@@ -36,12 +37,21 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose com 
 - Bibliotecas otimizadas (nvidia-ml-py3, GPUtil)
 - Cache inteligente de modelos
 - Processamento paralelo otimizado
+- **Modo CPU** - Performance garantida mesmo sem GPU
 
-Para usar com aceleração GPU, certifique-se de ter:
+**🎯 Configuração Flexível:**
+- **Com GPU**: Aceleração CUDA automática
+- **Sem GPU**: Fallback transparente para CPU
+- **Detecção automática**: Sistema escolhe melhor configuração
+
+Para **máxima performance com GPU**, certifique-se de ter:
 1. NVIDIA Docker instalado (`nvidia-docker2`)
 2. Drivers NVIDIA atualizados (535.86.10+)
 3. Docker Compose 3.8+ com suporte GPU
 
+**Para usar apenas CPU** (sem GPU):
+- Remova a linha `runtime: nvidia` do docker-compose.yml
+- Ou defina `FORCE_CPU=true` nas variáveis de ambiente
 ## Estrutura do Projeto
 
 ```
@@ -58,19 +68,26 @@ Para usar com aceleração GPU, certifique-se de ter:
 
 ### Pré-requisitos
 
+**Mínimo (CPU apenas):**
+- Docker 20.10+
+- Docker Compose 3.8+
+
+**Recomendado (GPU acelerada):**
 - Docker com runtime NVIDIA instalado
 - GPU NVIDIA com CUDA support
 - Driver NVIDIA 525.60.13 ou superior
-- Docker Compose 3.8+
 
 ### 1. Construir e Executar com Docker Compose
 
 ```bash
-# Construir e iniciar os serviços
+# Construir e iniciar (detecção automática GPU/CPU)
 docker-compose up -d
 
 # Verificar logs
 docker-compose logs -f tts-api
+
+# Forçar uso de CPU apenas (se necessário)
+FORCE_CPU=true docker-compose up -d
 
 # Parar os serviços
 docker-compose down
