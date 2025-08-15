@@ -14,13 +14,29 @@ import time
 import tempfile
 import shutil
 from pathlib import Path
+import sys
 
+# Configurar importações TTS com diagnóstico
 try:
+    # Verificar se TTS está instalado
+    import TTS
+    logger.info(f"✅ TTS encontrado: versão {TTS.__version__}")
     from TTS.api import TTS
-    import GPUtil
+    TTS_AVAILABLE = True
 except ImportError:
+    logger.error("❌ TTS não está instalado ou tem dependências faltando")
+    logger.error("💡 Tentando instalar: pip install TTS")
     TTS = None
+    TTS_AVAILABLE = False
+
+# Importar GPUtil separadamente (opcional)
+try:
+    import GPUtil
+    GPU_UTILS_AVAILABLE = True
+except ImportError:
+    logger.warning("⚠️  GPUtil não disponível - monitoramento GPU limitado")
     GPUtil = None
+    GPU_UTILS_AVAILABLE = False
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -32,10 +48,20 @@ def setup_gpu_optimization():
     Configurar otimizações GPU para CUDA 12.1 (PyTorch 2.4.1+cu121)
     Retorna True se GPU estiver funcionando, False para fallback CPU
     """
-    if torch.cuda.is_available():
-        try:
-            logger.info("🔍 Verificando disponibilidade CUDA...")
+    try:
+        # Verificar disponibilidade CUDA de forma mais robusta
+        if not torch.cuda.is_available():
+            logger.info("🖥️  CUDA não disponível no PyTorch")
+            return False
             
+        # Verificar se há GPUs disponíveis
+        if torch.cuda.device_count() == 0:
+            logger.info("🖥️  Nenhuma GPU CUDA encontrada")
+            return False
+            
+        logger.info("🔍 Verificando disponibilidade CUDA...")
+        
+        try:
             # Obter informações da GPU
             gpu_info = torch.cuda.get_device_properties(0)
             compute_capability = f"sm_{gpu_info.major}{gpu_info.minor}"
@@ -87,13 +113,9 @@ def setup_gpu_optimization():
             return True
             
         except Exception as e:
-            logger.error(f"❌ Erro ao configurar GPU: {e}", exc_info=True)
-            logger.warning("🔄 GPU indisponível, fazendo fallback para CPU")
+            logger.error(f"❌ Erro específico da GPU: {e}")
+            logger.warning("🔄 GPU com problemas, fazendo fallback para CPU")
             return False
-    else:
-        logger.info("🖥️  CUDA não disponível no sistema")
-        logger.info("🔄 Usando processamento CPU")
-    return False
 
 # Configurar GPU na inicialização
 gpu_available = setup_gpu_optimization()
@@ -143,8 +165,9 @@ async def startup_event():
     """Inicializar o modelo TTS na inicialização da aplicação"""
     global tts_model
     
-    if TTS is None:
+    if not TTS_AVAILABLE:
         logger.error("Coqui TTS não está instalado. Instale com: pip install TTS")
+        logger.info("🔧 Para instalar: docker exec -it tts-api pip install TTS")
         return
     
     # Configurar variáveis de ambiente para aceitar licença automaticamente
@@ -275,7 +298,7 @@ async def root():
 async def health_check():
     """Verificação de saúde da aplicação"""
     gpu_info = {}
-    if gpu_available and GPUtil:
+    if gpu_available and GPU_UTILS_AVAILABLE and GPUtil:
         try:
             gpus = GPUtil.getGPUs()
             if gpus:
@@ -292,18 +315,21 @@ async def health_check():
     
     return {
         "status": "healthy",
-        "tts_available": tts_model is not None,
+        "tts_available": TTS_AVAILABLE and tts_model is not None,
+        "tts_installed": TTS_AVAILABLE,
         "gpu_available": gpu_available,
         "device": device_type,
         "mode": "GPU Accelerated" if gpu_available else "CPU Fallback",
-        "gpu_info": gpu_info
+        "gpu_info": gpu_info,
+        "pytorch_version": torch.__version__,
+        "cuda_version": torch.version.cuda if torch.cuda.is_available() else None
     }
 
 @app.get("/models")
 async def list_models():
     """Listar modelos TTS disponíveis"""
-    if TTS is None:
-        raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
+    if not TTS_AVAILABLE:
+        raise HTTPException(status_code=500, detail="Coqui TTS não está instalado")
     
     try:
         logger.info("Tentando listar modelos TTS disponíveis...")
@@ -331,8 +357,8 @@ async def text_to_speech(request: TTSRequest):
     """
     Converter texto em áudio usando Coqui TTS
     """
-    if TTS is None:
-        raise HTTPException(status_code=500, detail="Coqui TTS não está disponível")
+    if not TTS_AVAILABLE:
+        raise HTTPException(status_code=500, detail="Coqui TTS não está instalado")
     
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Texto não pode estar vazio")
