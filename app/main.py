@@ -128,24 +128,8 @@ async def health_check():
                     "gpu_load": f"{gpu.load*100:.1f}%",
                     "temperature": f"{gpu.temperature}°C"
                 }
-        except:
-            pass
-    
-    gpu_info = {}
-    if gpu_available and GPUtil:
-        try:
-            gpus = GPUtil.getGPUs()
-            if gpus:
-                gpu = gpus[0]
-                gpu_info = {
-                    "name": gpu.name,
-                    "memory_used": f"{gpu.memoryUsed}MB",
-                    "memory_total": f"{gpu.memoryTotal}MB",
-                    "gpu_load": f"{gpu.load*100:.1f}%",
-                    "temperature": f"{gpu.temperature}°C"
-                }
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Erro ao obter informações da GPU: {e}")
     
     return {
         "status": "healthy",
@@ -199,23 +183,27 @@ async def text_to_speech(request: TTSRequest):
         device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
         logger.info(f"Gerando áudio para texto: {request.text[:50]}... (device: {device})")
         
-        # Criar buffer em memória para o áudio
-        audio_buffer = io.BytesIO()
-        
-        # Parâmetros para TTS
-        tts_kwargs = {}
-        if request.speaker:
-            tts_kwargs["speaker"] = request.speaker
-        if request.language:
-            tts_kwargs["language"] = request.language
-        if request.speed != 1.0:
-            tts_kwargs["speed"] = request.speed
-        
         # Medir tempo de inferência
         start_time = time.time()
         
+        # Gerar áudio usando TTS
+        wav_data = current_tts.tts(text=request.text, speaker=request.speaker, language=request.language)
+        
+        inference_time = time.time() - start_time
+        logger.info(f"Áudio gerado em {inference_time:.2f} segundos")
+        
+        # Criar buffer em memória para o áudio
+        audio_buffer = io.BytesIO()
+        
         # Converter para bytes e escrever no buffer
         import soundfile as sf
+        import numpy as np
+        
+        # Converter para numpy array se necessário
+        if not isinstance(wav_data, np.ndarray):
+            wav_data = np.array(wav_data)
+        
+        # Escrever no buffer como WAV
         sf.write(audio_buffer, wav_data, 22050, format='WAV')
         audio_buffer.seek(0)
         
