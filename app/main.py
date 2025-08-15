@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi import File, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import io
@@ -10,6 +11,9 @@ import os
 import psutil
 import threading
 import time
+import tempfile
+import shutil
+from pathlib import Path
 
 try:
     from TTS.api import TTS
@@ -103,6 +107,13 @@ class TTSRequest(BaseModel):
     use_gpu: Optional[bool] = True
     speed: Optional[float] = 1.0
 
+# Modelo para clonagem de voz
+class VoiceCloneRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    
+    text: str
+    language: Optional[str] = "pt"
+    use_gpu: Optional[bool] = True
 # Variável global para armazenar o modelo TTS
 tts_model = None
 
