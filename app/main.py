@@ -178,7 +178,9 @@ async def list_models():
     
     try:
         logger.info("Tentando listar modelos TTS disponíveis...")
-        models = TTS.list_models()
+        # Criar instância temporária para acessar lista de modelos
+        temp_tts = TTS()
+        models = temp_tts.list_models()
         logger.info(f"Encontrados {len(models) if models else 0} modelos")
         return {"available_models": models or []}
     except Exception as e:
