@@ -39,8 +39,8 @@ def setup_gpu_optimization():
             logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
             logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
             logger.info(f"CUDA Version: {torch.version.cuda}")
-            logger.info(f"PyTorch CUDA Version: {torch.version.cuda}")
-            logger.info(f"CUDA Runtime API Version: {torch.cuda.get_device_capability(0)}")
+            logger.info(f"PyTorch Version: {torch.__version__}")
+            logger.info(f"CUDA Runtime API: {torch.cuda.get_device_capability(0)}")
             
             # Verificar se a arquitetura é suportada pelo PyTorch
             supported_archs = torch.cuda.get_arch_list()
@@ -48,32 +48,30 @@ def setup_gpu_optimization():
             
             # RTX 5090 específica (sm_120) - verificação especial
             if gpu_info.major >= 12:  # Ada Lovelace Next-gen (RTX 5090)
-                logger.info("🚀 RTX 5090 detectada! Aplicando otimizações específicas...")
+                logger.info("🚀 RTX 5090 detectada! Aplicando otimizações CUDA 12.4...")
                 
                 # Configurações específicas para RTX 5090
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
                 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-                torch.backends.cuda.enable_flash_sdp(True)
-                # Otimizações CUDA 12.8 específicas
+                
+                # Otimizações CUDA 12.4 específicas
                 if hasattr(torch.backends.cuda, 'enable_flash_sdp'):
                     torch.backends.cuda.enable_flash_sdp(True)
                     logger.info("⚡ Flash Attention habilitado")
                 
                 # Tensor Cores de 4ª geração para RTX 5090
-                torch.set_float32_matmul_precision('high')  
-                
-                torch.set_float32_matmul_precision('high')  # Usar Tensor Cores de 4ª geração
+                torch.set_float32_matmul_precision('high')  # Tensor Cores de 4ª geração
                 
                 # Configurações de memória otimizadas para 32GB
                 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,roundup_power2_divisions:True,garbage_collection_threshold:0.6'
                 os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Performance máxima
                 os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1'
-                os.environ['CUDA_MODULE_LOADING'] = 'LAZY'  # CUDA 12.8 lazy loading
+                os.environ['CUDA_MODULE_LOADING'] = 'LAZY'  # CUDA 12.4 lazy loading
                 
-                logger.info("⚡ Tensor Cores de 4ª geração ativados (CUDA 12.8)")
+                logger.info("⚡ Tensor Cores de 4ª geração ativados (CUDA 12.4)")
                 logger.info("🧠 Otimizações de memória 32GB aplicadas")
-                logger.info("🔥 CUDA 12.8 lazy loading habilitado")
+                logger.info("🔥 CUDA 12.4 lazy loading habilitado")
             else:
                 # Para GPUs mais antigas, verificar compatibilidade normal
                 arch_supported = any(compute_capability in arch for arch in supported_archs)
