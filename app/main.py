@@ -97,9 +97,9 @@ class TTSRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
     
     text: str
-    model_name: Optional[str] = "tts_models/en/ljspeech/tacotron2-DDC"
+    model_name: Optional[str] = "tts_models/pt/cv/vits"
     speaker: Optional[str] = None
-    language: Optional[str] = "en"
+    language: Optional[str] = "pt"
     use_gpu: Optional[bool] = True
     speed: Optional[float] = 1.0
 
@@ -117,7 +117,7 @@ async def startup_event():
     
     try:
         # Inicializar com modelo padrão
-        default_model = "tts_models/en/ljspeech/tacotron2-DDC"
+        default_model = "tts_models/pt/cv/vits"
         logger.info(f"Carregando modelo TTS: {default_model}")
         
         # Configurar device (GPU se disponível)
@@ -128,7 +128,9 @@ async def startup_event():
         logger.info("Modelo TTS carregado com sucesso!")
         
         if gpu_available:
-            logger.info("Otimizações RTX 5090 ativadas!")
+            logger.info("Otimizações GPU ativadas!")
+        else:
+            logger.info("Usando CPU para processamento TTS")
     except Exception as e:
         logger.error(f"Erro ao carregar modelo TTS: {e}")
 
@@ -183,12 +185,12 @@ async def list_models():
         logger.error(f"Erro ao listar modelos: {e}", exc_info=True)
         # Fallback com modelos conhecidos
         fallback_models = [
+            "tts_models/pt/cv/vits",
+            "tts_models/pt/cv/tacotron2-DDC",
             "tts_models/en/ljspeech/tacotron2-DDC",
             "tts_models/en/ljspeech/glow-tts",
-            "tts_models/en/ljspeech/speedy-speech",
-            "tts_models/pt/cv/vits",
-            "tts_models/es/mai/tacotron2-DDC",
             "tts_models/fr/mai/tacotron2-DDC",
+            "tts_models/es/mai/tacotron2-DDC",
             "tts_models/de/mai/tacotron2-DDC"
         ]
         logger.info(f"Retornando lista de modelos conhecidos como fallback: {len(fallback_models)} modelos")
@@ -217,7 +219,7 @@ async def text_to_speech(request: TTSRequest):
     try:
         # Usar modelo global ou carregar um novo se especificado
         current_tts = tts_model
-        if request.model_name and request.model_name != "tts_models/en/ljspeech/tacotron2-DDC":
+        if request.model_name and request.model_name != "tts_models/pt/cv/vits":
             logger.info(f"Carregando modelo específico: {request.model_name}")
             device = "cuda" if (gpu_available and request.use_gpu) else "cpu"
             current_tts = TTS(model_name=request.model_name).to(device)
@@ -232,8 +234,32 @@ async def text_to_speech(request: TTSRequest):
         # Medir tempo de inferência
         start_time = time.time()
         
-        # Gerar áudio usando TTS
-        wav_data = current_tts.tts(text=request.text, speaker=request.speaker, language=request.language)
+        # Verificar se o modelo suporta múltiplos speakers
+        try:
+            # Tentar obter informações sobre speakers do modelo
+            speakers = getattr(current_tts, 'speakers', None)
+            is_multi_speaker = speakers is not None and len(speakers) > 0
+            
+            # Gerar áudio com parâmetros apropriados
+            tts_kwargs = {"text": request.text}
+            
+            # Adicionar speaker apenas se o modelo suportar e foi especificado
+            if is_multi_speaker and request.speaker:
+                tts_kwargs["speaker"] = request.speaker
+                logger.info(f"Usando speaker: {request.speaker}")
+            
+            # Adicionar language se especificado
+            if request.language:
+                tts_kwargs["language"] = request.language
+            
+            logger.info(f"Parâmetros TTS: {tts_kwargs}")
+            wav_data = current_tts.tts(**tts_kwargs)
+            
+        except Exception as tts_error:
+            logger.error(f"Erro específico do TTS: {tts_error}")
+            # Fallback - tentar apenas com texto
+            logger.info("Tentando fallback apenas com texto...")
+            wav_data = current_tts.tts(text=request.text)
         
         inference_time = time.time() - start_time
         logger.info(f"Áudio gerado em {inference_time:.2f} segundos")
