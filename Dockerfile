@@ -76,7 +76,7 @@ RUN pip install --no-cache-dir \
 
 # Instalar Coqui TTS - versão específica que funciona bem
 RUN pip install --no-cache-dir \
-    TTS==0.22.0 \
+    TTS==0.22.0
 
 # Instalar bibliotecas de monitoramento GPU
 RUN pip install --no-cache-dir \
