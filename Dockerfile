@@ -1,5 +1,9 @@
 FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
+# Configurar timezone e evitar prompts interativos
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Sao_Paulo
+
 # Configurar variáveis de ambiente NVIDIA e CUDA 12.1 (com fallback CPU)
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
@@ -16,6 +20,7 @@ ENV TTS_DEVICE=auto
 
 # Instalar Python 3.11 e dependências do sistema
 RUN apt-get update && apt-get install -y \
+    tzdata \
     software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y \
@@ -36,6 +41,8 @@ RUN apt-get update && apt-get install -y \
     libespeak-dev \
     libsndfile1 \
     ffmpeg \
+    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar Python 3.11 como padrão
