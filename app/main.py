@@ -38,7 +38,7 @@ def setup_gpu_optimization():
             logger.info(f"GPU detectada: {gpu_info.name}")
             logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
             logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
-            logger.info(f"CUDA Version: {torch.version.cuda}")
+            logger.info(f"CUDA Version: {torch.version.cuda} (PyTorch {torch.__version__})")
             logger.info(f"PyTorch Version: {torch.__version__}")
             logger.info(f"CUDA Runtime API: {torch.cuda.get_device_capability(0)}")
             

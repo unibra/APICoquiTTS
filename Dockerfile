@@ -51,8 +51,11 @@ COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Instalar PyTorch 2.5.1 com CUDA 12.1 (nightly para suporte RTX 5090)
-RUN pip install --no-cache-dir --pre \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
+# Instalar PyTorch com CUDA (se disponível) - mesma config dos outros serviços
+RUN pip install --no-cache-dir \
+    torch==2.4.1+cu121 \
+    torchaudio==2.4.1+cu121 \
+    --index-url https://download.pytorch.org/whl/cu121
 
 # Instalar bibliotecas de áudio
 RUN pip install --no-cache-dir \
