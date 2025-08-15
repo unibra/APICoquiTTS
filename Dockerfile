@@ -23,17 +23,20 @@ RUN apt-get update && apt-get install -y \
     libespeak-dev \
     libsndfile1 \
     ffmpeg \
-    nvidia-cuda-toolkit \
+    cuda-toolkit-12-8 \
+    cuda-runtime-12-8 \
+    cuda-drivers-520 \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar variáveis de ambiente NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-ENV CUDA_HOME=/usr/local/cuda-12.4
+ENV CUDA_HOME=/usr/local/cuda-12.8
+ENV CUDA_VERSION=12.8
 ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
-ENV NVIDIA_REQUIRE_CUDA="cuda>=12.4"
-ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0 12.0"
+ENV NVIDIA_REQUIRE_CUDA="cuda>=12.8"
+ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0+PTX"
 
 # Definir diretório de trabalho
 WORKDIR /app
@@ -47,10 +50,12 @@ COPY app/requirements.txt .
 # Instalar dependências Python do requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar PyTorch nightly com suporte RTX 5090 (sm_120)
+# Instalar PyTorch nightly com CUDA 12.8 e suporte RTX 5090 (sm_120)
 RUN pip install --no-cache-dir \
-    --pre torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/nightly/cu124
+    torch==2.5.1+cu128 \
+    torchvision==0.20.1+cu128 \
+    torchaudio==2.5.1+cu128 \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Instalar bibliotecas de áudio primeiro
 RUN pip install --no-cache-dir \

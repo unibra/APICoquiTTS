@@ -20,11 +20,14 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - CUDA_VISIBLE_DEVICES=0
-      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,roundup_power2_divisions:True
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,roundup_power2_divisions:True,garbage_collection_threshold:0.6
       - WHISPER_DEVICE=cuda
       - CUDA_LAUNCH_BLOCKING=0
       - TORCH_CUDNN_V8_API_ENABLED=1
       - TORCH_ALLOW_TF32_CUBLAS_OVERRIDE=1
+      - CUDA_MODULE_LOADING=LAZY
+      - CUDA_VERSION=12.8
+      - NVCC_PREPEND_FLAGS=--compiler-options -fPIC
     ports:
       - "8888:8888"
     volumes:
