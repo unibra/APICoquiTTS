@@ -174,8 +174,6 @@ async def startup_event():
             
     except Exception as e:
         logger.error(f"Erro ao carregar modelo TTS: {e}")
-        logger.error("🚨 Aplicação iniciará sem modelo TTS carregado!")
-        tts_model = None
 
 @app.get("/")
 async def root():
@@ -440,62 +438,110 @@ async def voice_cloning_tts(
             # XTTS v2 suporta clonagem com speaker_wav
             logger.info("🎵 Executando síntese TTS com clonagem...")
             
-            # Tentar diferentes abordagens para compatibilidade
+            # Verificar se o modelo carregado suporta clonagem de voz
+            model_name = getattr(tts_model, 'model_name', 'Unknown')
+            logger.info(f"🤖 Verificando compatibilidade do modelo: {model_name}")
+            
+            # Tentar métodos em ordem de preferência
             try:
-                # Método 1: XTTS v2 padrão
+                # Método 1: XTTS v2 com clonagem (ideal)
+                logger.info("🎭 Tentando método 1: XTTS v2 com clonagem completa...")
                 wav_data = tts_model.tts(
                     text=text,
                     speaker_wav=temp_audio_path,
                     language=language
                 )
-                logger.info("✅ Método padrão XTTS v2 funcionou!")
+                logger.info("✅ Método 1: XTTS v2 com clonagem bem-sucedido!")
                 
             except Exception as method1_error:
-                logger.warning(f"⚠️  Método 1 falhou: {method1_error}")
-                logger.info("🔄 Tentando método alternativo...")
+                logger.warning(f"⚠️  Método 1 falhou: {type(method1_error).__name__}: {str(method1_error)}")
+                logger.info("🔄 Tentando método 2: tts_to_file...")
                 
-                # Método 2: Sem especificar language explicitamente
+                # Método 2: tts_to_file (alternativo)
                 try:
-                    wav_data = tts_model.tts_to_file(
+                    # Criar arquivo temporário para output
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_output:
+                        temp_output_path = temp_output.name
+                    
+                    logger.info(f"📁 Arquivo temporário de saída: {temp_output_path}")
+                    
+                    # Usar tts_to_file
+                    tts_model.tts_to_file(
                         text=text,
                         speaker_wav=temp_audio_path,
-                        file_path=None,  # Retorna array em vez de salvar
+                        file_path=temp_output_path,
                         language=language
                     )
-                    logger.info("✅ Método alternativo com tts_to_file funcionou!")
+                    
+                    # Carregar o áudio gerado
+                    import soundfile as sf
+                    wav_data, _ = sf.read(temp_output_path)
+                    
+                    # Limpar arquivo temporário
+                    Path(temp_output_path).unlink()
+                    
+                    logger.info("✅ Método 2: tts_to_file bem-sucedido!")
                     
                 except Exception as method2_error:
-                    logger.warning(f"⚠️  Método 2 falhou: {method2_error}")
-                    # Re-raise o erro original
-                    raise method1_error
+                    logger.warning(f"⚠️  Método 2 falhou: {type(method2_error).__name__}: {str(method2_error)}")
+                    logger.info("🔄 Tentando método 3: clonagem simplificada...")
+                    
+                    # Método 3: Tentar sem language (caso seja o problema)
+                    try:
+                        wav_data = tts_model.tts(
+                            text=text,
+                            speaker_wav=temp_audio_path
+                            # Sem language - deixar o modelo decidir
+                        )
+                        logger.info("✅ Método 3: clonagem sem language especificado funcionou!")
+                        
+                    except Exception as method3_error:
+                        logger.warning(f"⚠️  Método 3 falhou: {type(method3_error).__name__}: {str(method3_error)}")
+                        logger.error(f"❌ Todos os métodos de clonagem falharam!")
+                        logger.error(f"   - Método 1: {str(method1_error)}")
+                        logger.error(f"   - Método 2: {str(method2_error)}")
+                        logger.error(f"   - Método 3: {str(method3_error)}")
+                        
+                        # Re-raise o erro mais relevante
+                        raise method1_error
             
             logger.info("✅ Síntese TTS concluída com sucesso!")
             
         except Exception as tts_error:
             logger.error(f"❌ Erro na síntese TTS: {type(tts_error).__name__}: {str(tts_error)}")
             
-            # Tentar fallback com TTS simples (sem clonagem)
-            logger.info("🔄 Tentando fallback para TTS simples sem clonagem...")
+            # IMPORTANTE: Fallback para TTS simples (sem clonagem) com language
+            logger.warning("⚠️  Clonagem falhou completamente! Tentando TTS simples...")
             try:
-                # Fallback: TTS normal sem clonagem
-                logger.warning("⚠️  Clonagem falhou, usando TTS normal...")
+                logger.info("🔄 Fallback 1: TTS simples COM language...")
                 wav_data = tts_model.tts(
                     text=text,
                     language=language
                 )
-                logger.info("✅ Fallback TTS simples bem-sucedido!")
+                logger.info("✅ Fallback 1: TTS simples com language funcionou!")
+                logger.warning("⚠️  AVISO: Usando voz padrão (não clonada)")
                 
             except Exception as fallback_error:
-                logger.error(f"❌ Fallback também falhou: {type(fallback_error).__name__}: {str(fallback_error)}")
+                logger.error(f"❌ Fallback 1 falhou: {type(fallback_error).__name__}: {str(fallback_error)}")
                 
-                # Último fallback: TTS sem language
-                logger.info("🔄 Último fallback: TTS sem especificar language...")
+                # Fallback 2: TTS sem language
+                logger.info("🔄 Fallback 2: TTS simples SEM language...")
                 try:
                     wav_data = tts_model.tts(text=text)
-                    logger.info("✅ Último fallback bem-sucedido!")
+                    logger.info("✅ Fallback 2: TTS simples sem language funcionou!")
+                    logger.warning("⚠️  AVISO: Usando voz e idioma padrão")
+                    
                 except Exception as final_error:
-                    logger.error(f"❌ Todos os fallbacks falharam: {final_error}")
-                    raise Exception(f"Clonagem falhou: {str(tts_error)}. TTS simples falhou: {str(fallback_error)}. Final: {str(final_error)}")
+                    logger.error(f"❌ Fallback 2 também falhou: {type(final_error).__name__}: {str(final_error)}")
+                    
+                    # Reportar todos os erros
+                    error_summary = (
+                        f"Clonagem falhou: {str(tts_error)}. "
+                        f"Fallback 1 (com language): {str(fallback_error)}. "
+                        f"Fallback 2 (sem language): {str(final_error)}"
+                    )
+                    logger.error(f"❌ TODOS os fallbacks falharam: {error_summary}")
+                    raise Exception(error_summary)
         
         inference_time = time.time() - start_time
         logger.info(f"⏱️  Áudio gerado em {inference_time:.2f} segundos")
