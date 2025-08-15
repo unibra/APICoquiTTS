@@ -1,13 +1,13 @@
-FROM nvidia/cuda:12.4-devel-ubuntu22.04
+FROM nvidia/cuda:12.1-devel-ubuntu22.04
 
-# Configurar variáveis de ambiente NVIDIA e CUDA 12.4
+# Configurar variáveis de ambiente NVIDIA e CUDA 12.1
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-ENV CUDA_HOME=/usr/local/cuda-12.4
-ENV CUDA_VERSION=12.4
+ENV CUDA_HOME=/usr/local/cuda-12.1
+ENV CUDA_VERSION=12.1
 ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
-ENV NVIDIA_REQUIRE_CUDA="cuda>=12.4"
+ENV NVIDIA_REQUIRE_CUDA="cuda>=12.1"
 ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0 12.0+PTX"
 
 # Instalar Python 3.11 e dependências do sistema
@@ -50,9 +50,9 @@ COPY app/requirements.txt .
 # Instalar dependências Python básicas
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar PyTorch 2.5.1 com CUDA 12.4 (nightly para suporte RTX 5090)
+# Instalar PyTorch 2.5.1 com CUDA 12.1 (nightly para suporte RTX 5090)
 RUN pip install --no-cache-dir --pre \
-    torch torchvision torchaudio \
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
 
 # Instalar bibliotecas de áudio
 RUN pip install --no-cache-dir \
@@ -102,7 +102,7 @@ COPY app/ .
 RUN mkdir -p models output logs tmp cache && \
     chmod 755 models output logs tmp cache
 
-# Configurar variáveis de ambiente para otimização RTX 5090 com CUDA 12.4
+# Configurar variáveis de ambiente para otimização RTX 5090 com CUDA 12.1
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,roundup_power2_divisions:True,garbage_collection_threshold:0.6
 ENV CUDA_LAUNCH_BLOCKING=0
 ENV TORCH_CUDNN_V8_API_ENABLED=1
