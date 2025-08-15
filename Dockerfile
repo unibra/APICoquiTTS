@@ -8,7 +8,7 @@ ENV CUDA_VERSION=12.1
 ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 ENV NVIDIA_REQUIRE_CUDA="cuda>=12.1"
-ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0 12.0+PTX"
+ENV TORCH_CUDA_ARCH_LIST="5.0 6.0 7.0 7.5 8.0 8.6 9.0+PTX"
 
 # Instalar Python 3.11 e dependências do sistema
 RUN apt-get update && apt-get install -y \
@@ -50,8 +50,7 @@ COPY app/requirements.txt .
 # Instalar dependências Python básicas
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar PyTorch 2.5.1 com CUDA 12.1 (nightly para suporte RTX 5090)
-# Instalar PyTorch com CUDA (se disponível) - mesma config dos outros serviços
+# Instalar PyTorch com CUDA 12.1 (alinhado com outros serviços)
 RUN pip install --no-cache-dir \
     torch==2.4.1+cu121 \
     torchaudio==2.4.1+cu121 \
@@ -105,7 +104,7 @@ COPY app/ .
 RUN mkdir -p models output logs tmp cache && \
     chmod 755 models output logs tmp cache
 
-# Configurar variáveis de ambiente para otimização RTX 5090 com CUDA 12.1
+# Configurar variáveis de ambiente para otimização GPU
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,roundup_power2_divisions:True,garbage_collection_threshold:0.6
 ENV CUDA_LAUNCH_BLOCKING=0
 ENV TORCH_CUDNN_V8_API_ENABLED=1

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Configurações de otimização para RTX 5090
 def setup_gpu_optimization():
-    """Configurar otimizações específicas para RTX 5090"""
+    """Configurar otimizações GPU (alinhado com PyTorch 2.4.1+cu121)"""
     if torch.cuda.is_available():
         try:
             # Obter informações da GPU
@@ -38,46 +38,28 @@ def setup_gpu_optimization():
             logger.info(f"GPU detectada: {gpu_info.name}")
             logger.info(f"Memória GPU: {gpu_info.total_memory / 1024**3:.1f} GB")
             logger.info(f"Compute Capability: {gpu_info.major}.{gpu_info.minor} ({compute_capability})")
-            logger.info(f"CUDA Version: {torch.version.cuda} (PyTorch {torch.__version__})")
-            logger.info(f"PyTorch Version: {torch.__version__}")
-            logger.info(f"CUDA Runtime API: {torch.cuda.get_device_capability(0)}")
+            logger.info(f"PyTorch: {torch.__version__} | CUDA: {torch.version.cuda}")
+            logger.info(f"CUDA Runtime: {torch.cuda.get_device_capability(0)}")
             
             # Verificar se a arquitetura é suportada pelo PyTorch
             supported_archs = torch.cuda.get_arch_list()
             logger.info(f"Arquiteturas CUDA suportadas pelo PyTorch: {supported_archs}")
             
             # RTX 5090 específica (sm_120) - verificação especial
-            if gpu_info.major >= 12:  # Ada Lovelace Next-gen (RTX 5090)
-                logger.info("🚀 RTX 5090 detectada! Aplicando otimizações CUDA 12.1...")
+            if gpu_info.major >= 9:  # RTX 4090/5090 e superiores
+                logger.info(f"🚀 GPU {gpu_info.name} detectada! Aplicando otimizações...")
                 
-                # Configurações específicas para RTX 5090
+                # Configurações para GPUs modernas (RTX 4090/5090)
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
                 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
                 
-                # Otimizações CUDA 12.4 específicas
-                if hasattr(torch.backends.cuda, 'enable_flash_sdp'):
-                    torch.backends.cuda.enable_flash_sdp(True)
-                    logger.info("⚡ Flash Attention habilitado")
-                
-                # Tensor Cores de 4ª geração para RTX 5090
-                torch.set_float32_matmul_precision('high')  # Tensor Cores de 4ª geração
-                
-                # Configurações de memória otimizadas para RTX 5090
-                os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,roundup_power2_divisions:True,garbage_collection_threshold:0.6'
-                os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Performance máxima
-                os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1'
-                os.environ['CUDA_MODULE_LOADING'] = 'LAZY'  # CUDA 12.1 lazy loading
-                
-                logger.info("⚡ Tensor Cores de 4ª geração ativados (CUDA 12.1)")
-                logger.info("🧠 Otimizações de memória 32GB aplicadas")
-                logger.info("🔥 CUDA 12.1 lazy loading habilitado")
+                # Tensor Cores para GPUs modernas
+                torch.set_float32_matmul_precision('high')
+                logger.info("⚡ Tensor Cores habilitados")
+                logger.info("🧠 Otimizações de memória GPU aplicadas")
             else:
-                # Para GPUs mais antigas, verificar compatibilidade normal
-                arch_supported = any(compute_capability in arch for arch in supported_archs)
-                if not arch_supported:
-                    logger.warning(f"⚠️  Arquitetura {compute_capability} pode não estar suportada")
-                    # Tentar mesmo assim - PyTorch nightly pode suportar
+                logger.info("🖥️  Aplicando configurações básicas GPU")
             
             # Testar uma operação simples na GPU para verificar compatibilidade real
             try:
@@ -102,7 +84,7 @@ def setup_gpu_optimization():
             memory_allocated = torch.cuda.memory_allocated(0) / 1024**3
             logger.info(f"🎯 Memória GPU - Reservada: {memory_reserved:.1f}GB, Alocada: {memory_allocated:.1f}GB")
             
-            logger.info("🚀 Otimizações RTX 5090 ativadas com sucesso!")
+            logger.info("🚀 Otimizações GPU ativadas com sucesso!")
             return True
             
         except Exception as e:
@@ -116,7 +98,7 @@ gpu_available = setup_gpu_optimization()
 
 app = FastAPI(
     title="Coqui TTS API",
-    description="Serviço de Text-to-Speech usando Coqui TTS otimizado para NVIDIA RTX 5090",
+    description="Serviço de Text-to-Speech usando Coqui TTS com aceleração CUDA (PyTorch 2.4.1+cu121)",
     version="1.0.0"
 )
 
@@ -157,8 +139,7 @@ async def startup_event():
         logger.info("🚀 Inicializando modelo TTS...")
         
         # Configurar device (GPU se disponível)
-        # Forçar CPU por enquanto devido à incompatibilidade CUDA com RTX 5090
-        device = "cpu"  # Temporary fallback
+        device = "cuda" if gpu_available else "cpu"
         logger.info(f"Usando device: {device}")
         
         # Lista de modelos para tentar (em ordem de preferência)
@@ -179,10 +160,10 @@ async def startup_event():
                 
                 # Testar o modelo com uma frase simples
                 test_text = "Olá" if "pt" in model_name else "Hello"
-            # Configurar device com otimizações RTX 5090
+            # Configurar device com aceleração GPU
             if device == "cuda" and gpu_available:
                 temp_model = TTS(model_name=model_name, progress_bar=True, gpu=True).to(device)
-                logger.info("🚀 Modelo carregado na RTX 5090 com otimizações GPU")
+                logger.info("🚀 Modelo carregado na GPU com aceleração CUDA")
             else:
                 temp_model = TTS(model_name=model_name, progress_bar=True, gpu=False).to(device)
                 logger.info("🖥️  Modelo carregado na CPU")
@@ -238,14 +219,14 @@ async def startup_event():
         if device == "cuda" and gpu_available:
             try:
                 memory_used = torch.cuda.memory_allocated(0) / 1024**3
-                memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        # Log específico para GPU
                 logger.info(f"🎯 GPU RTX 5090 - Memória usada: {memory_used:.1f}GB/{memory_total:.1f}GB")
             except:
                 pass
         
-        if is_multi_speaker:
+                logger.info(f"🎯 GPU - Memória usada: {memory_used:.1f}GB/{memory_total:.1f}GB")
             logger.info(f"🔊 Total de speakers: {len(speakers)}")
-            logger.info(f"🎵 Primeiros speakers: {speakers[:10]}")
+            logger.info(f"🎵 Speakers disponíveis: {speakers[:10]}")
         
         try:
             # Verificar capacidades do modelo
@@ -256,7 +237,7 @@ async def startup_event():
             pass
             
         if device == "cuda":
-            logger.info("🚀 Usando RTX 5090 para processamento TTS acelerado!")
+            logger.info("🚀 Usando GPU para processamento TTS acelerado!")
         else:
             logger.info("🖥️  Usando CPU para processamento TTS")
         

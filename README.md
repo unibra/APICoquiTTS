@@ -1,23 +1,23 @@
-# Coqui TTS API Service
+# Coqui TTS API Service com CUDA
 
-Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otimizado para NVIDIA RTX 5090.
+Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose com aceleração CUDA.
 
 ## Funcionalidades
 
 - 🎤 Conversão de texto em áudio usando modelos Coqui TTS
-- 🚀 Otimizações específicas para NVIDIA RTX 5090 (Ada Lovelace)
+- 🚀 Aceleração GPU com CUDA 12.1
 - 🚀 API REST com FastAPI
 - 🐳 Containerização com Docker
 - 📊 Documentação automática da API
 - 🔧 Configuração flexível de modelos e vozes
 - 📈 Health checks e monitoramento
-- ⚡ Aceleração GPU com CUDA 12.1
-- 🔥 Suporte a Tensor Cores de 4ª geração
+- ⚡ PyTorch 2.4.1 com CUDA 12.1
+- 🔥 Suporte a Tensor Cores modernas
 
-**Otimizações Específicas RTX 5090:**
+**Otimizações GPU:**
 - **Base Python 3.11** - Com cuDNN 9.11.0 e CUDA 12.1
-- **PyTorch 2.4.1** - Otimizado para CUDA 12.1
-- **Tensor Cores 4ª geração** - Habilitado com `allow_tf32=True`
+- **PyTorch 2.4.1+cu121** - Alinhado com outros serviços
+- **Tensor Cores** - Habilitado com `allow_tf32=True`
 - **Precisão mista** - `torch.set_float32_matmul_precision('high')`
 - **Benchmark automático** - `torch.backends.cudnn.benchmark = True`
 - **Gerenciamento de memória** - Cache otimizado e limpeza automática
@@ -31,12 +31,12 @@ Serviço de Text-to-Speech (TTS) usando Coqui TTS, FastAPI e Docker Compose otim
 - Configurações otimizadas do PyTorch CUDA
 
 **Performance:**
-- PyTorch 2.1.2 com CUDA 11.8
+- PyTorch 2.4.1 com CUDA 12.1
 - Bibliotecas otimizadas (nvidia-ml-py3, GPUtil)
 - Cache inteligente de modelos
 - Processamento paralelo otimizado
 
-Para usar com RTX 5090, certifique-se de ter:
+Para usar com aceleração GPU, certifique-se de ter:
 1. NVIDIA Docker instalado (`nvidia-docker2`)
 2. Drivers NVIDIA atualizados (535.86.10+)
 3. Docker Compose 3.8+ com suporte GPU
@@ -58,7 +58,7 @@ Para usar com RTX 5090, certifique-se de ter:
 ### Pré-requisitos
 
 - Docker com runtime NVIDIA instalado
-- NVIDIA RTX 5090 com drivers atualizados
+- GPU NVIDIA com CUDA support
 - Driver NVIDIA 525.60.13 ou superior
 - Docker Compose 3.8+
 
